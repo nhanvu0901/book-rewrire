@@ -1,7 +1,13 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
-projects/
-books/
 .DS_Store
+# secrets and book texts never go into git (the Lion, the Witch and the Wardrobe is copyrighted)
+.env
+secrets.env
+books/
+extracted/
+projects/

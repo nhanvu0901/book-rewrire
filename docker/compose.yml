@@ -1,0 +1,58 @@
+# Local infrastructure for the NEXT step: loading book.json into Postgres, then Neo4j.
+# Nothing in this repository uses it yet (phase A only writes files).
+#
+#   postgres  127.0.0.1:5433   processed data and app state
+#   neo4j     127.0.0.1:7475   Neo4j Browser (http)
+#             127.0.0.1:7688   Bolt (what the Python driver connects to)
+#
+# The project name is "book-clone-dev", NOT "book-clone": Docker Compose prefixes containers,
+# network and volumes with it, so this stack never touches the volumes of the other stack
+# (project "book-clone") that may be running on the same machine. The host ports differ for
+# the same reason (that stack owns 5432, 7474 and 7687).
+#
+# Passwords come from the environment, never from this file:
+#   NEO4J_PASSWORD   required, at least 8 characters (Neo4j refuses shorter ones)
+#   POSTGRES_PASSWORD optional, defaults to "postgres" (local development only)
+# `make db-up` also reads ~/.config/book-clone/secrets.env, so put them there.
+name: book-clone-dev
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-book_clone}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-book_clone}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD (at least 8 characters)}
+    ports:
+      - "127.0.0.1:${NEO4J_HTTP_PORT:-7475}:7474"
+      - "127.0.0.1:${NEO4J_BOLT_PORT:-7688}:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      # $$ stops Compose from substituting; the shell inside the container strips "neo4j/".
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" 'RETURN 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  neo4j_data:

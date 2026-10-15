@@ -1,11 +1,14 @@
-# pov-retell: Phase A, nạp sách (book loading and extraction)
+# pov-retell: nạp sách (phase A) và base ingest vào Neo4j
 
-Đây là bản **tối giản, dễ học** của dự án POV Story Retelling. Nó chỉ làm **phase A**: đọc một
-cuốn sách (HTML, EPUB hoặc TXT), tìm cấu trúc chương, cắt thành **units** và **paragraphs** có ID
-cố định, rồi ghi ra **file thường** (JSON + text) để bạn mở ra đọc và tự nạp vào Postgres / Neo4j
-ở bước sau.
+Đây là bản **tối giản, dễ học** của dự án POV Story Retelling. Nó có hai phần:
 
-**Không có** trong repo này: database, SQLAlchemy, Alembic, LangGraph, phân tích nhân vật (B*),
+1. **Phase A, trích xuất**: đọc một cuốn sách (HTML, EPUB hoặc TXT), tìm cấu trúc chương, cắt thành
+   **units** và **paragraphs** có ID cố định, rồi ghi ra **file thường** (JSON + text).
+2. **Base ingest** (branch `clean/ingest-base`): một **LangGraph** nhỏ, không dùng LLM, đọc các file đó
+   và ghi vào **Neo4j**. Bạn viết các bước phân tích (B1, B2, ...) lên trên base này. Xem
+   [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md).
+
+Chỉ có LangGraph và Neo4j. **Không có**: Postgres, SQLAlchemy, Alembic, phân tích nhân vật (B*),
 retell, FastAPI/UI, eval, Phoenix/OTel, cache, tính chi phí. Bản đầy đủ (khoảng 2000 test, nhiều
 lớp) vẫn nằm ở branch `integration`; xem `docs/NEXT_STEPS.md`.
 
@@ -46,7 +49,11 @@ không có paragraph nào, một chapter đứng sau part mà không khai báo p
 | 7 | `src/pov_retell/paragraphs.py` | A3 |
 | 8 | `src/pov_retell/llm.py`, `llm_map.py` | A2b tùy chọn: client DeepSeek tối thiểu và prompt |
 | 9 | `src/pov_retell/output.py`, `cli.py` | Ghi file, lệnh `pov` |
-| - | `src/pov_retell/text.py`, `config.py` | Helper nhỏ; settings |
+| 10 | `src/pov_retell/ingest_graph.py` | **Ingest**: `IngestState`, các node LangGraph, edge, stream sự kiện |
+| 11 | `src/pov_retell/neo4j_store.py` | **Ingest**: driver, healthcheck, schema, ghi MERGE/UNWIND |
+| - | `src/pov_retell/text.py`, `config.py` | Helper nhỏ; settings (gồm `NEO4J_*`) |
+| - | `docker/compose.yml`, `Makefile` | Neo4j 5 community (project `book-clone-dev`), `neo4j-up/down/shell`, `ingest` |
+| - | `docs/INGEST_BASE.md` | LangGraph + mô hình Neo4j + 10 câu Cypher + cách thêm node mới |
 | - | `tests/` | Mỗi bước có test riêng, đọc test để thấy ví dụ vào/ra |
 
 ## 3. Cài đặt và chạy
@@ -88,6 +95,9 @@ trường). Xem `.env.example` (chỉ có tên biến). Không bao giờ in ho�
 | `DEEPSEEK_API_KEY` | (trống) | chỉ cho `--map llm` |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | |
 | `DEEPSEEK_MODEL` | `deepseek-v4-pro` | |
+| `NEO4J_PASSWORD` | (trống, **bắt buộc** cho Neo4j) | `make neo4j-up`, `pov ingest`; không bao giờ bị in ra |
+| `NEO4J_USER` | `neo4j` | |
+| `NEO4J_HTTP_PORT` / `NEO4J_BOLT_PORT` | `7475` / `7688` | khác `7474`/`7687` của stack `book-clone` |
 
 ## 4. Định dạng output
 
@@ -212,10 +222,11 @@ thật được; code chỉ được kiểm bằng fake.
 ## 7. Kiểm tra chất lượng
 
 ```bash
-make test         # ~70 test, không cần mạng, không cần sách thật
+make test         # ~90 test, không cần mạng, không cần sách thật, không cần Neo4j
 make lint         # ruff check + ruff format --check
 make typecheck    # mypy --strict trên src và tests
 make test-books   # OPT-IN: chạy 3 cuốn thật trong BOOK_CLONE_DATA_DIR/books và kiểm số đếm
+make test-neo4j   # OPT-IN: ghi một sách tạm vào Neo4j thật (cần make neo4j-up), rồi xóa nó
 ```
 
 Test chỉ dùng **truyện tự bịa** (`tests/samples.py`, vẽ ra HTML, EPUB và TXT) cùng vài đoạn ngắn
@@ -223,20 +234,32 @@ tự viết. **Không commit văn bản sách** (LWW còn bản quyền); sách 
 `make test-books` kiểm: LWW 17 chapter, Treasure Island 34 chapter (6 part), Pride and Prejudice 61
 chapter, đủ 7 file.
 
-## 8. Hạ tầng cho bước sau (chưa có code nào dùng)
+## 8. Ingest vào Neo4j (LangGraph)
 
 ```bash
-export NEO4J_PASSWORD=...        # hoặc thêm vào ~/.config/book-clone/secrets.env (>= 8 ký tự)
-make db-up                       # Postgres 17 + Neo4j 5 community, chờ healthcheck xanh
-make db-down
+echo 'NEO4J_PASSWORD=<mật-khẩu, >= 8 ký tự>' >> ~/.config/book-clone/secrets.env   # không commit, không in
+make neo4j-up                                  # Neo4j 5 community, chờ healthcheck xanh
+uv run pov extract ~/.local/share/book-clone/books/lww.html
+uv run pov ingest the-lion-the-witch-and-the-wardrobe      # hoặc: make ingest BOOK=<book_id>
+uv run pov neo4j-status                        # kết nối và các sách đã nạp
+uv run pov graph                               # sơ đồ Mermaid của LangGraph
+make neo4j-shell                               # cypher-shell;  make neo4j-down để tắt
 ```
 
-`docker/compose.yml` đặt project name `book-clone-dev` (không phải `book-clone`) nên container,
-network và **volume khác hẳn** stack `book-clone` đang chạy. Cổng host cũng khác để không đụng nhau:
-Postgres `127.0.0.1:5433`, Neo4j Browser `127.0.0.1:7475`, Bolt `127.0.0.1:7688` (đổi bằng
-`POSTGRES_PORT`, `NEO4J_HTTP_PORT`, `NEO4J_BOLT_PORT`).
+Graph (deterministic, không LLM): `load_extracted → validate → ensure_schema → write_book →
+write_units → write_paragraphs → verify`, cộng một node `analysis_placeholder` (mặc định tắt) làm chỗ cắm
+cho các bước phân tích của bạn. Mô hình dữ liệu:
+`(:Book)-[:HAS_UNIT]->(:Unit)-[:HAS_PARAGRAPH]->(:Paragraph)` cùng các chuỗi `NEXT`, và
+`(Part)-[:CONTAINS]->(Chapter)` khi sách có part. Ghi bằng `MERGE` nên chạy lại không sinh trùng.
+Cờ: `--checkpoint sqlite` và `--resume` (chạy tiếp sau crash), `--replace` (ghi lại từ đầu).
+Chi tiết, 10 câu Cypher và cách thêm node: [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md).
+
+`docker/compose.yml` chỉ có Neo4j và đặt project name `book-clone-dev` (không phải `book-clone`), nên
+container, network và **volume khác hẳn** stack `book-clone` đang chạy. Cổng host cũng khác để không
+đụng nhau: stack kia dùng `7474`/`7687`, ở đây là Neo4j Browser **`7475`** và Bolt **`7688`** (đổi bằng
+`NEO4J_HTTP_PORT`, `NEO4J_BOLT_PORT`, đã có trong `config.py`). APOC là tùy chọn, tắt mặc định.
 
 ## 9. Tiếp theo
 
-Xem [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md): nạp `book.json` vào Postgres, rồi B1+ và Neo4j, kèm
+Xem [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md): các bước phân tích B1+ như những node mới của graph, kèm
 con trỏ tới spec và tới code tham chiếu ở branch `integration`.

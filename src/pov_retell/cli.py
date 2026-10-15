@@ -1,27 +1,54 @@
-"""Command line: `pov extract <file|url> [--map heuristic|llm]` and `pov show <book_id>`."""
+"""Command line.
+
+Phase A:  `pov extract <file|url> [--map heuristic|llm]`   `pov show <book_id>`
+Ingest:   `pov ingest <book_id> [--resume] [--checkpoint sqlite]`   `pov graph`   `pov neo4j-status`
+"""
 
 import enum
 from collections import Counter
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
 import typer
+from neo4j.exceptions import Neo4jError
 
 from pov_retell.config import Settings
 from pov_retell.cut import StructureMapError
+from pov_retell.ingest_graph import (
+    GraphWriter,
+    IngestState,
+    NodeEvent,
+    build_graph,
+    open_checkpointer,
+    stream_events,
+    thread_config,
+)
 from pov_retell.llm import DeepSeekClient, LLMError
 from pov_retell.models import ExtractedBook
+from pov_retell.neo4j_store import (
+    Neo4jUnavailable,
+    Neo4jWriter,
+    books_overview,
+    check_health,
+    connect,
+)
 from pov_retell.output import load_extraction, save_extraction
 from pov_retell.pipeline import extract_book
 
 app = typer.Typer(
-    help="Phase A: load a book and extract its units and paragraphs.", no_args_is_help=True
+    help="Phase A (extract) and the Neo4j ingest base (ingest). See README.md.",
+    no_args_is_help=True,
 )
 
 
 class MapChoice(enum.StrEnum):
     heuristic = "heuristic"  # generic typographic rules: free, offline, the default
     llm = "llm"  # DeepSeek classifies the candidates (needs DEEPSEEK_API_KEY)
+
+
+class CheckpointChoice(enum.StrEnum):
+    memory = "memory"  # default: forgotten when the process ends
+    sqlite = "sqlite"  # a file under DATA_DIR: a crashed run can be resumed
 
 
 def _fail(message: str) -> NoReturn:
@@ -104,3 +131,86 @@ def _summary(extracted: ExtractedBook) -> str:
     ]
     lines += [f"Warning:    {w}" for w in extracted.warnings]
     return "\n".join(lines)
+
+
+# ----------------------------------------------------------------- ingest into Neo4j
+
+
+@app.command()
+def ingest(
+    book_id: str = typer.Argument(..., help="Book id of an extraction made by `pov extract`"),
+    resume: bool = typer.Option(False, "--resume", help="Continue the last unfinished run"),
+    checkpoint: CheckpointChoice = typer.Option(
+        CheckpointChoice.memory, "--checkpoint", help="Where LangGraph saves progress"
+    ),
+    replace: bool = typer.Option(False, "--replace", help="Delete the book's old nodes first"),
+    analysis: bool = typer.Option(False, "--analysis", help="Run the (placeholder) analysis node"),
+) -> None:
+    """Write extracted/<book_id>/book.json into Neo4j with the LangGraph ingest graph."""
+    settings = Settings()
+    if resume and checkpoint is CheckpointChoice.memory:
+        _fail("--resume needs --checkpoint sqlite: the memory checkpointer forgets on exit")
+    try:
+        driver = connect(settings)
+        check_health(driver)
+    except Neo4jUnavailable as exc:
+        _fail(str(exc))
+
+    with driver, open_checkpointer(checkpoint.value, settings.checkpoint_db) as saver:
+        graph = build_graph(Neo4jWriter(driver), settings.extracted_dir, saver)
+        config = thread_config(book_id)
+        graph_input: IngestState | None = {
+            "book_id": book_id,
+            "replace": replace,
+            "analysis": analysis,
+        }
+        if resume:
+            if not graph.get_state(config).next:
+                _fail("nothing to resume: there is no unfinished run for this book")
+            graph_input = None  # None = continue from the last checkpoint
+        try:
+            for event in stream_events(graph, graph_input, config):
+                _print_event(event)
+        except (OSError, ValueError, Neo4jError) as exc:  # the failing node was already printed
+            retry = f"\nFix the cause, then: pov ingest {book_id} --resume --checkpoint sqlite"
+            _fail(f"{exc}{retry if checkpoint is CheckpointChoice.sqlite else ''}")
+        final = graph.get_state(config).values
+
+    if final.get("errors"):
+        _fail("\n".join(final["errors"]))
+    typer.echo(f"\nIngested {book_id}: {final['written']}")
+    typer.echo(f"Explore it: {settings.neo4j_browser_url} (see docs/INGEST_BASE.md for queries)")
+
+
+def _print_event(event: NodeEvent) -> None:
+    if event.status == "start":
+        typer.echo(f"  > {event.node}")
+    else:
+        mark = "ok " if event.status == "ok" else "ERR"
+        typer.echo(f"  {mark} {event.node:<18} {event.seconds:6.2f}s  {event.detail}")
+
+
+@app.command()
+def graph() -> None:
+    """Print the ingest graph as a Mermaid diagram (paste it into https://mermaid.live)."""
+    no_writer = cast(GraphWriter, None)  # drawing never runs a node, so no database is needed
+    typer.echo(build_graph(no_writer, Path(".")).get_graph().draw_mermaid())
+
+
+@app.command(name="neo4j-status")
+def neo4j_status() -> None:
+    """Check that Neo4j is reachable and list the books it holds."""
+    settings = Settings()
+    try:
+        driver = connect(settings)
+        with driver:
+            info = check_health(driver)
+            books = books_overview(driver)
+    except Neo4jUnavailable as exc:
+        _fail(str(exc))
+    typer.echo(f"Neo4j {info['version']} {info['edition']} at {settings.neo4j_uri}")
+    typer.echo(f"Browser: {settings.neo4j_browser_url} (user {settings.NEO4J_USER})")
+    for b in books or [{"id": "(no books yet)", "title": "", "units": 0, "paragraphs": 0}]:
+        typer.echo(
+            f"  {b['id']:<40} {b['units']:>4} units {b['paragraphs']:>6} paragraphs  {b['title']}"
+        )

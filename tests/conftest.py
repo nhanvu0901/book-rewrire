@@ -7,15 +7,19 @@ import samples
 
 from pov_retell.models import BookFormat
 
+# Tests that touch things outside the repo only run when asked for: marker -> switch.
+OPT_IN = {"local_books": "POV_LOCAL_BOOKS", "neo4j": "POV_NEO4J"}
+
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """The local_books tests read real books from disk, so they only run when asked for."""
-    if os.environ.get("POV_LOCAL_BOOKS") == "1":
-        return
-    skip = pytest.mark.skip(reason="opt-in: run with POV_LOCAL_BOOKS=1 (make test-books)")
-    for item in items:
-        if "local_books" in item.keywords:
-            item.add_marker(skip)
+    """local_books reads real books from disk; neo4j writes to the dev Neo4j."""
+    for marker, switch in OPT_IN.items():
+        if os.environ.get(switch) == "1":
+            continue
+        skip = pytest.mark.skip(reason=f"opt-in: run with {switch}=1 (see the Makefile)")
+        for item in items:
+            if marker in item.keywords:
+                item.add_marker(skip)
 
 
 @pytest.fixture(scope="session")

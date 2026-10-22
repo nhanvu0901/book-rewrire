@@ -1,4 +1,4 @@
-"""A2b and A2c: the structure map (heuristic and LLM) and the cut with its validation."""
+"""A2b and A2c: the LLM structure map and the cut with its validation."""
 
 from functools import partial
 
@@ -6,22 +6,23 @@ import pytest
 import samples
 from fakes import FakeLLM, classify_like_an_llm
 
-from pov_retell.candidates import find_candidates
-from pov_retell.cut import StructureMapError, cut_units, validate_units
-from pov_retell.heuristic_map import heuristic_map
-from pov_retell.llm_map import llm_map
-from pov_retell.load import Source, make_book
-from pov_retell.models import BookFormat, Candidate, MapItem, MapResponse, Unit, UnitKind
+from pov_retell.book.candidates import find_candidates
+from pov_retell.book.cut import StructureMapError, cut_units, validate_units
+from pov_retell.book.llm_map import llm_map
+from pov_retell.book.load import Source, make_book
+from pov_retell.book.models import BookFormat, Candidate, MapItem, MapResponse, Unit, UnitKind
 
 
 def cut_sample(fmt: BookFormat, content: bytes) -> tuple[str, list[Candidate], list[Unit]]:
     text, candidates = find_candidates(content, fmt)
-    units, _ = cut_units(text, candidates, heuristic_map(candidates, text))
+    llm = FakeLLM(lambda prompt: classify_like_an_llm(candidates))
+    book = make_book(Source(content, f"x.{fmt}", "x"))
+    units, _ = cut_units(text, candidates, llm_map(book, candidates, llm))
     return text, candidates, units
 
 
 @pytest.mark.parametrize("fmt", ["html", "epub", "txt"])
-def test_heuristic_map_cuts_parts_and_chapters(
+def test_llm_map_cuts_parts_and_chapters(
     fmt: BookFormat, sample_bytes: dict[BookFormat, bytes]
 ) -> None:
     text, _, units = cut_sample(fmt, sample_bytes[fmt])
@@ -32,24 +33,6 @@ def test_heuristic_map_cuts_parts_and_chapters(
     covered = text[units[0].char_start : units[-1].char_end]
     assert "Project Gutenberg" not in covered and "CONTENTS" not in covered
     assert "PART ONE" in covered
-
-
-@pytest.mark.parametrize("fmt", ["html", "txt"])
-def test_the_llm_map_gives_the_same_cut_as_the_heuristic_map(
-    fmt: BookFormat, sample_bytes: dict[BookFormat, bytes]
-) -> None:
-    content = sample_bytes[fmt]
-    text, candidates, expected = cut_sample(fmt, content)
-    llm = FakeLLM(lambda prompt: classify_like_an_llm(candidates))
-    book = make_book(Source(content, f"x.{fmt}", "x"))
-
-    items = llm_map(book, candidates, llm)
-    units, _ = cut_units(text, candidates, items)
-
-    assert [(u.kind, u.char_start, u.char_end) for u in units] == [
-        (u.kind, u.char_start, u.char_end) for u in expected
-    ]
-    assert len(llm.prompts) == 1
 
 
 def test_the_llm_sees_candidates_with_short_previews_not_the_book(

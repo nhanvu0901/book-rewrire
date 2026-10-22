@@ -1,15 +1,15 @@
-"""Step A2b, optional way: let the LLM classify the candidates (`pov extract --map llm`).
+"""Step A2b: let the LLM classify the candidates (`pov extract`).
 
 "The LLM proposes, code anchors and checks." The model never sees the book text and never
 returns an offset: it receives the candidate list (id, kind, text, a short preview) and answers
 with an id, a role and a clean title for each one. Code cuts the text (cut.py) and validates the
-result, exactly as it does for the heuristic map.
+result.
 """
 
 from functools import partial
 
-from pov_retell.llm import JsonLLM
-from pov_retell.models import Book, Candidate, MapItem, MapResponse
+from pov_retell.book.models import Book, Candidate, MapItem, MapResponse
+from pov_retell.infrastructure.llm import JsonLLM
 
 BATCH_SIZE = 80  # candidates per call, so the JSON answer fits well inside the token limit
 

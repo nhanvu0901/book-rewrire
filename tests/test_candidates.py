@@ -3,8 +3,8 @@
 import pytest
 import samples
 
-from pov_retell.candidates import find_candidates
-from pov_retell.models import BookFormat
+from pov_retell.book.candidates import find_candidates
+from pov_retell.book.models import BookFormat
 
 
 def texts(content: bytes, fmt: BookFormat) -> list[str]:

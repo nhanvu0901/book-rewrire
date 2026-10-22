@@ -9,8 +9,8 @@
 import shutil
 from pathlib import Path
 
-from pov_retell.load import slugify
-from pov_retell.models import SCHEMA_VERSION, ExtractedBook
+from pov_retell.book.load import slugify
+from pov_retell.book.models import SCHEMA_VERSION, ExtractedBook
 
 
 class BookIdConflictError(ValueError):

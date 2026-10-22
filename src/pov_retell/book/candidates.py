@@ -12,9 +12,9 @@ import re
 from dataclasses import dataclass
 from urllib.parse import unquote
 
-from pov_retell.html_text import HtmlBlock, Link, html_to_blocks
-from pov_retell.models import BookFormat, Candidate, CandidateKind
-from pov_retell.text import NUMBER, ROMAN, contains_words, merge_titles, words
+from pov_retell.book.html_text import HtmlBlock, Link, html_to_blocks
+from pov_retell.book.models import BookFormat, Candidate, CandidateKind
+from pov_retell.book.text import NUMBER, ROMAN, contains_words, merge_titles, words
 
 PREVIEW_CHARS = 160
 LICENSE_MARKER = re.compile(r"^\*{3}\s*(?:START|END) OF (?:THE|THIS) PROJECT GUTENBERG", re.I)

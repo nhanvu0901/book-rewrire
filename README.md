@@ -1,14 +1,15 @@
-# pov-retell: nạp sách (phase A) và base ingest vào Neo4j
+# pov-retell: trích xuất sách và kết nối Neo4j
 
-Đây là bản **tối giản, dễ học** của dự án POV Story Retelling. Nó có hai phần:
+Đây là bản **tối giản, dễ học** của dự án POV Story Retelling. Trạng thái hiện tại:
 
 1. **Phase A, trích xuất**: đọc một cuốn sách (HTML, EPUB hoặc TXT), tìm cấu trúc chương, cắt thành
    **units** và **paragraphs** có ID cố định, rồi ghi ra **file thường** (JSON + text).
-2. **Base ingest** (branch `clean/ingest-base`): một **LangGraph** nhỏ, không dùng LLM, đọc các file đó
-   và ghi vào **Neo4j**. Bạn viết các bước phân tích (B1, B2, ...) lên trên base này. Xem
-   [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md).
+2. **Character Discovery & Resolution**: đọc tuần tự từng chương trong `units/`, gọi OpenRouter,
+   kiểm tra và lưu JSON nhân vật tích lũy, rồi ghi các trường Character được chọn vào Neo4j.
+   Xem [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md) và [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md).
 
-Chỉ có LangGraph và Neo4j. **Không có**: Postgres, SQLAlchemy, Alembic, phân tích nhân vật (B*),
+LangGraph điều phối vòng lặp chương, không dùng checkpoint.
+**Không có**: Postgres, SQLAlchemy, Alembic, phân tích beat/tri thức,
 retell, FastAPI/UI, eval, Phoenix/OTel, cache, tính chi phí. Bản đầy đủ (khoảng 2000 test, nhiều
 lớp) vẫn nằm ở branch `integration`; xem `docs/NEXT_STEPS.md`.
 
@@ -24,7 +25,7 @@ file / URL ──A1──▶ Book ──A2a──▶ canonical text + candidates
 |---|---|---|---|
 | **A1** | code | Đọc file hoặc tải URL, **nhận dạng định dạng từ nội dung** (không tin đuôi file), tính **sha256**, đọc title/author | `load.py` |
 | **A2a** | code | Tạo **canonical text** (văn bản sạch, mọi vị trí về sau đều trỏ vào nó) và gom **candidates**: chỗ *có thể* bắt đầu một unit (heading, link mục lục, anchor, dòng giống tiêu đề, spine/nav của EPUB) | `html_text.py`, `candidates.py` |
-| **A2b** | code (mặc định) hoặc LLM (tùy chọn) | Dựng **structure map**: mỗi candidate là `front`, `toc`, `license`, `body_unit`, `part_heading` hay `back`. LLM chỉ trả **ID + role + title**, không bao giờ trả vị trí | `heuristic_map.py`, `llm_map.py`, `llm.py` |
+| **A2b** | LLM | Dựng **structure map**: mỗi candidate là `front`, `toc`, `license`, `body_unit`, `part_heading` hay `back`. LLM chỉ trả **ID + role + title**, không bao giờ trả vị trí | `llm_map.py`, `llm.py` |
 | **A2c** | code | **Cắt** canonical text theo vị trí của các candidate được chọn, rồi **validate**: liền nhau, đúng thứ tự, không rỗng, phủ trọn thân truyện, mỗi part có chapter. Front matter, back matter và license **nằm ngoài** mọi unit | `cut.py` |
 | **A3** | code | Chia mỗi unit thành **paragraphs** có ID cố định (`u04_p041` = unit 4, đoạn 41) và gắn **flag** cho đoạn bất thường (`too_short`, `too_long`, `suspicious_header`, `license_leak`) | `paragraphs.py` |
 
@@ -36,24 +37,37 @@ không có paragraph nào, một chapter đứng sau part mà không khai báo p
 
 ## 2. Bắt đầu đọc từ đâu
 
+Mã được chia theo trách nhiệm, nhưng vẫn là cùng một chương trình dòng lệnh:
+
+```text
+src/pov_retell/
+├── cli.py                  lệnh `pov` mà bạn gõ
+├── config.py               cấu hình và đường dẫn dữ liệu
+├── book/                   đọc, tách và lưu sách thành file
+├── ingest/                 LangGraph, xử lý chương và models nhân vật
+└── infrastructure/         kết nối OpenRouter và Neo4j
+```
+
 Đọc theo thứ tự này (mỗi file có docstring giải thích *vì sao*, không chỉ *cái gì*):
 
 | # | File | Nội dung |
 |---|---|---|
-| 1 | `src/pov_retell/models.py` | Mọi data shape của phase A (Book, Candidate, MapItem, Unit, Paragraph, ExtractedBook) |
-| 2 | `src/pov_retell/pipeline.py` | Hàm `extract_book()`: A1 → A3 trong 40 dòng, đọc cái này để thấy bức tranh tổng |
-| 3 | `src/pov_retell/load.py` | A1 |
-| 4 | `src/pov_retell/candidates.py` (+ `html_text.py`) | A2a, phần dài nhất vì mỗi định dạng một kiểu |
-| 5 | `src/pov_retell/heuristic_map.py` | A2b mặc định (luật chung, **không có luật riêng cho cuốn nào**) |
-| 6 | `src/pov_retell/cut.py` | A2c: cắt và validate |
-| 7 | `src/pov_retell/paragraphs.py` | A3 |
-| 8 | `src/pov_retell/llm.py`, `llm_map.py` | A2b tùy chọn: client DeepSeek tối thiểu và prompt |
-| 9 | `src/pov_retell/output.py`, `cli.py` | Ghi file, lệnh `pov` |
-| 10 | `src/pov_retell/ingest_graph.py` | **Ingest**: `IngestState`, các node LangGraph, edge, stream sự kiện |
-| 11 | `src/pov_retell/neo4j_store.py` | **Ingest**: driver, healthcheck, schema, ghi MERGE/UNWIND |
-| - | `src/pov_retell/text.py`, `config.py` | Helper nhỏ; settings (gồm `NEO4J_*`) |
+| 1 | `src/pov_retell/book/models.py` | Mọi data shape của phase A (Book, Candidate, MapItem, Unit, Paragraph, ExtractedBook) |
+| 2 | `src/pov_retell/book/pipeline.py` | Hàm `extract_book()`: A1 → A3 trong 40 dòng, đọc cái này để thấy bức tranh tổng |
+| 3 | `src/pov_retell/book/load.py` | A1 |
+| 4 | `src/pov_retell/book/candidates.py` (+ `html_text.py`) | A2a, phần dài nhất vì mỗi định dạng một kiểu |
+| 5 | `src/pov_retell/infrastructure/llm.py`, `book/llm_map.py` | A2b: client OpenRouter và prompt |
+| 6 | `src/pov_retell/book/cut.py` | A2c: cắt và validate |
+| 7 | `src/pov_retell/book/paragraphs.py` | A3 |
+| 9 | `src/pov_retell/book/output.py`, `cli.py` | Ghi file, lệnh `pov` |
+| 10 | `src/pov_retell/ingest/pipeline.py` | Hàm `ingest_book`, gọi các graph theo bước |
+| 10a | `src/pov_retell/ingest/graph/character_discovery.py` | Node, edge và state của graph nhân vật |
+| 11 | `src/pov_retell/ingest/extrac_character.py`, `models/character_discovery.py` | Xử lý và kiểm tra danh sách nhân vật, thuộc tính và quan hệ |
+| 12 | `src/pov_retell/infrastructure/neo4j_store.py` | Kết nối và ghi Character vào Neo4j |
+| 13 | `prompt/extract_character.py` | Prompt Character Discovery & Resolution |
+| - | `src/pov_retell/book/text.py`, `config.py` | Helper nhỏ; settings (gồm `NEO4J_*`) |
 | - | `docker/compose.yml`, `Makefile` | Neo4j 5 community (project `book-clone-dev`), `neo4j-up/down/shell`, `ingest` |
-| - | `docs/INGEST_BASE.md` | LangGraph + mô hình Neo4j + 10 câu Cypher + cách thêm node mới |
+| - | `docs/INGEST_BASE.md` | Cách chạy ingest, vị trí kết quả và giới hạn hiện tại |
 | - | `tests/` | Mỗi bước có test riêng, đọc test để thấy ví dụ vào/ra |
 
 ## 3. Cài đặt và chạy
@@ -63,8 +77,7 @@ Cần Python 3.12 và [uv](https://docs.astral.sh/uv/).
 ```bash
 make install                      # uv sync --extra dev
 
-uv run pov extract <file|url>                  # heuristic map (mặc định, miễn phí, offline)
-uv run pov extract <file|url> --map llm        # LLM map (cần DEEPSEEK_API_KEY)
+uv run pov extract <file|url>                  # LLM map (cần OPENROUTER_API_KEY)
 uv run pov extract <file> --id my-book         # đặt book id (mặc định: slug của title)
 uv run pov extract <file> --out ./out          # thư mục ra (mặc định: DATA_DIR/extracted)
 
@@ -72,12 +85,12 @@ uv run pov show <book_id>                      # bảng units, flag, cảnh báo
 uv run pov show <book_id> u04                  # in các paragraph của unit u04
 ```
 
-Ví dụ với 3 cuốn đặt trong `~/.local/share/book-clone/books/`:
+Ví dụ với 3 cuốn đặt trong `book/books/` của project:
 
 ```bash
-uv run pov extract ~/.local/share/book-clone/books/lww.html
-uv run pov extract ~/.local/share/book-clone/books/treasure_island.html
-uv run pov extract ~/.local/share/book-clone/books/treasure_island.epub --id treasure-island-epub
+uv run pov extract book/books/lww.html
+uv run pov extract book/books/treasure_island.html
+uv run pov extract book/books/treasure_island.epub --id treasure-island-epub
 ```
 
 > **Một cuốn, nhiều định dạng:** html, epub và txt của cùng một cuốn đều có title
@@ -86,16 +99,17 @@ uv run pov extract ~/.local/share/book-clone/books/treasure_island.epub --id tre
 > đè (kết quả như nhau). ID của paragraph chỉ ổn định **trong một file**: html, epub, txt của cùng
 > một cuốn có số đoạn hơi khác nhau, đừng trộn.
 
-**Cấu hình** (`pydantic-settings`, đọc `~/.config/book-clone/secrets.env`, rồi `.env`, rồi biến môi
-trường). Xem `.env.example` (chỉ có tên biến). Không bao giờ in hoặc commit secret.
+**Cấu hình** (`pydantic-settings` đọc `.env` ở gốc repo; biến môi trường có thể ghi đè).
+Sao chép `.env.example` thành `.env` rồi điền đủ giá trị. `.env` không được commit.
 
-| Biến | Mặc định | Dùng cho |
+| Biến | Giá trị trong `.env` hiện tại | Dùng cho |
 |---|---|---|
-| `BOOK_CLONE_DATA_DIR` | `~/.local/share/book-clone` | sách nguồn ở `books/`, output ở `extracted/` |
-| `DEEPSEEK_API_KEY` | (trống) | chỉ cho `--map llm` |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | |
-| `DEEPSEEK_MODEL` | `deepseek-v4-pro` | |
-| `NEO4J_PASSWORD` | (trống, **bắt buộc** cho Neo4j) | `make neo4j-up`, `pov ingest`; không bao giờ bị in ra |
+| `BOOK_CLONE_DATA_DIR` | `<project>/book` | sách nguồn ở `book/books/`, output ở `book/extracted/` |
+| `OPENROUTER_API_KEY` | cần điền | `pov extract` |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | |
+| `OPENROUTER_MODEL` | chọn trong `.env` | Model used for extraction and verification |
+| `OPENROUTER_MAX_TOKENS` | set in `.env` | Positive output-token limit, including reasoning tokens where applicable |
+| `NEO4J_PASSWORD` | đặt trong `.env`, **bắt buộc** cho Neo4j | `make neo4j-up`, `pov ingest`; không bao giờ bị in ra |
 | `NEO4J_USER` | `neo4j` | |
 | `NEO4J_HTTP_PORT` / `NEO4J_BOLT_PORT` | `7475` / `7688` | khác `7474`/`7687` của stack `book-clone` |
 
@@ -117,7 +131,7 @@ Ví dụ thật, chạy trên truyện tự bịa dùng trong test (`The Lantern
 $ uv run pov extract lantern.txt
 Book:       the-lantern-keeper | The Lantern Keeper by Jane Doe
 File:       txt, sha256 a40642bd86841b9d...
-Map:        heuristic, 11 candidates
+Map:        llm, 11 candidates
 Units:      5 (2 part, 3 chapter)
 Paragraphs: 7 (0 flagged)
 
@@ -148,7 +162,7 @@ CHAPTER I: The Lamp
   "schema_version": 1,
   "book": {"id": "the-lantern-keeper", "title": "The Lantern Keeper", "author": "Jane Doe",
            "format": "txt", "sha256": "a40642bd...", "source": "/path/to/lantern.txt"},
-  "map_method": "heuristic",
+  "map_method": "llm",
   "candidates": [{"cand_id": "cand_005", "kind": "caps_line", "text": "THE CLIFF",
                   "char_pos": 276, "preview": "THE CLIFF CHAPTER I. The Lamp One evening ..."}],
   "map_items":  [{"cand_id": "cand_005", "role": "front", "unit_kind": "front",
@@ -170,9 +184,10 @@ CHAPTER I: The Lamp
 Tên bảng và cột bám theo mục 5.1 của thiết kế (`books`, `structure_candidates`, `structure_maps`,
 `units`, `paragraphs`), nên bước ingest sau không phải đổi tên gì.
 
-## 5. Kết quả thật trên 3 cuốn sách
+## 5. Kết quả cũ trên 3 cuốn sách
 
-Heuristic map, không LLM, cùng một code cho cả 7 file (số liệu do `uv run pov extract` in ra):
+Số liệu dưới đây thuộc lần trích xuất cũ trước khi chuyển sang LLM. Chúng không phải kết quả
+đã kiểm chứng của pipeline hiện tại:
 
 | File | Units | Paragraphs | Flagged |
 |---|---|---|---|
@@ -204,55 +219,55 @@ vị của nút NEXT. Muốn chỉ lấy chapter: `[u for u in units if u["kind"
   vì mỗi định dạng ngắt dòng và chèn số trang theo kiểu riêng. Đó là lý do ID chỉ ổn định
   trong **một file** (xem ghi chú ở mục 3).
 
-## 6. LLM map (tùy chọn)
+## 6. LLM map
 
-`uv run pov extract <file> --map llm` gửi danh sách candidate (ID, kind, text, vài chữ đầu) cho
-DeepSeek và nhận lại ID + role + title. Code vẫn là bên cắt và validate. `llm.py` chỉ ~90 dòng:
+`uv run pov extract <file>` gửi danh sách candidate (ID, kind, text, vài chữ đầu) cho
+OpenRouter và nhận lại ID + role + title. Code vẫn là bên cắt và validate. `llm.py` chỉ ~90 dòng:
 
-- model và `base_url` lấy từ config (`deepseek-v4-pro`, `https://api.deepseek.com`);
-- **thinking luôn bị tắt** (client không có công tắc bật nó);
+- model và `base_url` lấy từ config (`openai/gpt-4o-mini`, `https://openrouter.ai/api/v1`);
 - `json_object` rồi validate bằng Pydantic; câu trả lời sai thì thử lại **tối đa 2 lần**, mỗi lần
   kèm đúng lỗi vừa gặp;
 - câu trả lời bỏ sót, lặp hoặc bịa `cand_id` bị từ chối trước khi tới bước cắt.
 
-Mặc định vẫn là heuristic và chạy được cho cả 3 cuốn. Test **không gọi API thật**: dùng fake
-(`tests/fakes.py`, `tests/test_llm.py`). Số dư DeepSeek hiện đang bằng 0 nên `--map llm` chưa chạy
-thật được; code chỉ được kiểm bằng fake.
+Unit test dùng fake
+(`tests/fakes.py`, `tests/test_llm.py`) nên không gọi API. Test riêng
+`tests/test_openrouter_integration.py` gửi một request thật khi chạy `make test-openrouter`;
+cần key OpenRouter trong `.env` và model đang chọn phải sẵn sàng phục vụ.
 
 ## 7. Kiểm tra chất lượng
 
 ```bash
-make test         # ~90 test, không cần mạng, không cần sách thật, không cần Neo4j
+make test         # test offline, không cần sách thật hoặc Neo4j
 make lint         # ruff check + ruff format --check
 make typecheck    # mypy --strict trên src và tests
-make test-books   # OPT-IN: chạy 3 cuốn thật trong BOOK_CLONE_DATA_DIR/books và kiểm số đếm
-make test-neo4j   # OPT-IN: ghi một sách tạm vào Neo4j thật (cần make neo4j-up), rồi xóa nó
+make test-neo4j   # Opt-in: connectivity and temporary Character writes
+make test-openrouter # OPT-IN: gửi một request thật tới OpenRouter (cần key trong .env; có tính phí)
 ```
 
 Test chỉ dùng **truyện tự bịa** (`tests/samples.py`, vẽ ra HTML, EPUB và TXT) cùng vài đoạn ngắn
 tự viết. **Không commit văn bản sách** (LWW còn bản quyền); sách thật chỉ nằm ngoài git.
-`make test-books` kiểm: LWW 17 chapter, Treasure Island 34 chapter (6 part), Pride and Prejudice 61
-chapter, đủ 7 file.
 
-## 8. Ingest vào Neo4j (LangGraph)
+## 8. Ingest nhân vật vào Neo4j
 
 ```bash
-echo 'NEO4J_PASSWORD=<mật-khẩu, >= 8 ký tự>' >> ~/.config/book-clone/secrets.env   # không commit, không in
+ # Đặt NEO4J_PASSWORD (>= 8 ký tự) trong .env trước khi chạy; không commit file này.
 make neo4j-up                                  # Neo4j 5 community, chờ healthcheck xanh
-uv run pov extract ~/.local/share/book-clone/books/lww.html
-uv run pov ingest the-lion-the-witch-and-the-wardrobe      # hoặc: make ingest BOOK=<book_id>
-uv run pov neo4j-status                        # kết nối và các sách đã nạp
-uv run pov graph                               # sơ đồ Mermaid của LangGraph
+uv run pov neo4j-status                        # chỉ kiểm tra kết nối
+uv run pov ingest narnia-debug
 make neo4j-shell                               # cypher-shell;  make neo4j-down để tắt
 ```
 
-Graph (deterministic, không LLM): `load_extracted → validate → ensure_schema → write_book →
-write_units → write_paragraphs → verify`, cộng một node `analysis_placeholder` (mặc định tắt) làm chỗ cắm
-cho các bước phân tích của bạn. Mô hình dữ liệu:
-`(:Book)-[:HAS_UNIT]->(:Unit)-[:HAS_PARAGRAPH]->(:Paragraph)` cùng các chuỗi `NEXT`, và
-`(Part)-[:CONTAINS]->(Chapter)` khi sách có part. Ghi bằng `MERGE` nên chạy lại không sinh trùng.
-Cờ: `--checkpoint sqlite` và `--resume` (chạy tiếp sau crash), `--replace` (ghi lại từ đầu).
-Chi tiết, 10 câu Cypher và cách thêm node: [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md).
+`ingest_book` runs the `character_discovery` LangGraph through all chapters, saving
+cumulative character snapshots and resolving IDs and explicit merges. After discovery
+finishes, it writes the selected Character properties to Neo4j.
+
+Relationship verification has been removed. Character JSON still includes the discovery
+step's relationship proposals; ingestion does not validate their meaning or create
+`RELATES_TO` edges. Existing run data is retained.
+
+Output: `book/ingest/<book_id>/<run_id>/characters.json` and cumulative snapshots under
+`chapters/`. Each invocation creates a new run; there is no checkpoint or resume.
+See [`doc_ai/INGEST_BASE.md`](doc_ai/INGEST_BASE.md) for details and limitations.
 
 `docker/compose.yml` chỉ có Neo4j và đặt project name `book-clone-dev` (không phải `book-clone`), nên
 container, network và **volume khác hẳn** stack `book-clone` đang chạy. Cổng host cũng khác để không
@@ -261,5 +276,5 @@ container, network và **volume khác hẳn** stack `book-clone` đang chạy. C
 
 ## 9. Tiếp theo
 
-Xem [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md): các bước phân tích B1+ như những node mới của graph, kèm
-con trỏ tới spec và tới code tham chiếu ở branch `integration`.
+Xem [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md): thiết kế Character Discovery & Resolution,
+JSON nhân vật tích lũy theo chương và các trường được lưu vào Neo4j.

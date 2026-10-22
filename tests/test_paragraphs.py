@@ -2,20 +2,28 @@
 
 import pytest
 import samples
+from fakes import sample_llm
 
-from pov_retell.candidates import find_candidates
-from pov_retell.cut import cut_units
-from pov_retell.heuristic_map import heuristic_map
-from pov_retell.models import BookFormat
-from pov_retell.paragraphs import paragraph_flags, split_paragraphs
+from pov_retell.book.candidates import find_candidates
+from pov_retell.book.cut import cut_units
+from pov_retell.book.llm_map import llm_map
+from pov_retell.book.load import Source, make_book
+from pov_retell.book.models import BookFormat, Candidate, Unit
+from pov_retell.book.paragraphs import paragraph_flags, split_paragraphs
+
+
+def sample_units(fmt: BookFormat, content: bytes) -> tuple[str, list[Candidate], list[Unit]]:
+    text, candidates = find_candidates(content, fmt)
+    book = make_book(Source(content, f"sample.{fmt}", "x"))
+    units, _ = cut_units(text, candidates, llm_map(book, candidates, sample_llm(content, fmt)))
+    return text, candidates, units
 
 
 @pytest.mark.parametrize("fmt", ["html", "epub", "txt"])
 def test_paragraphs_have_stable_ids_and_the_story_text_only(
     fmt: BookFormat, sample_bytes: dict[BookFormat, bytes]
 ) -> None:
-    text, candidates = find_candidates(sample_bytes[fmt], fmt)
-    units, _ = cut_units(text, candidates, heuristic_map(candidates, text))
+    text, candidates, units = sample_units(fmt, sample_bytes[fmt])
     paragraphs = split_paragraphs(units, text, candidates)
 
     # every format gives the same paragraphs; the headings and subtitles are not among them
@@ -30,8 +38,7 @@ def test_paragraphs_have_stable_ids_and_the_story_text_only(
 def test_paragraph_offsets_point_into_the_canonical_text(
     fmt: BookFormat, sample_bytes: dict[BookFormat, bytes]
 ) -> None:
-    text, candidates = find_candidates(sample_bytes[fmt], fmt)
-    units, _ = cut_units(text, candidates, heuristic_map(candidates, text))
+    text, candidates, units = sample_units(fmt, sample_bytes[fmt])
     by_id = {u.id: u for u in units}
     for p in split_paragraphs(units, text, candidates):
         assert " ".join(text[p.char_start : p.char_end].split()) == p.text
@@ -39,8 +46,7 @@ def test_paragraph_offsets_point_into_the_canonical_text(
 
 
 def test_part_units_have_no_paragraphs(sample_bytes: dict[BookFormat, bytes]) -> None:
-    text, candidates = find_candidates(sample_bytes["txt"], "txt")
-    units, _ = cut_units(text, candidates, heuristic_map(candidates, text))
+    text, candidates, units = sample_units("txt", sample_bytes["txt"])
     owners = {p.unit_id for p in split_paragraphs(units, text, candidates)}
     assert owners == {u.id for u in units if u.kind == "chapter"}
 

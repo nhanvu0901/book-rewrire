@@ -1,7 +1,7 @@
 [project]
 name = "pov-retell"
 version = "0.1.0"
-description = "POV story retelling: phase A only (book loading and extraction)"
+description = "Book extraction and character discovery for POV story retelling"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -33,7 +33,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pov_retell"]
+packages = ["src/pov_retell", "prompt"]
 
 [tool.ruff]
 target-version = "py312"
@@ -53,6 +53,6 @@ ignore_missing_imports = true  # ebooklib ships no type stubs
 testpaths = ["tests"]
 pythonpath = ["tests"]
 markers = [
-    "local_books: runs the real books in BOOK_CLONE_DATA_DIR/books (opt-in: POV_LOCAL_BOOKS=1)",
-    "neo4j: writes a throwaway book into the dev Neo4j (opt-in: POV_NEO4J=1, skipped if unreachable)",
+    "neo4j: tests connectivity and temporary Character writes (opt-in: POV_NEO4J=1)",
+    "openrouter: sends a paid request to the real OpenRouter API (opt-in: POV_OPENROUTER=1)",
 ]

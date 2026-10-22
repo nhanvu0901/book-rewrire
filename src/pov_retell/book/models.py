@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 SCHEMA_VERSION = 1
 
 BookFormat = Literal["html", "epub", "txt"]
-MapMethod = Literal["heuristic", "llm"]
+MapMethod = Literal["heuristic", "llm"]  # legacy heuristic files remain readable
 UnitKind = Literal["chapter", "letter", "part", "section", "front", "back"]
 
 # How code found a candidate (A2a).
@@ -58,7 +58,7 @@ class Candidate(BaseModel):
 
 
 class MapItem(BaseModel):
-    """A2b: the classification of one candidate (from the heuristic or from the LLM)."""
+    """A2b: the LLM's classification of one candidate (or a stored legacy map)."""
 
     cand_id: str
     role: CandidateRole

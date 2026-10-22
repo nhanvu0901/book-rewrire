@@ -5,7 +5,8 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from pov_retell.models import Candidate
+from pov_retell.book.candidates import find_candidates
+from pov_retell.book.models import BookFormat, Candidate
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -28,14 +29,20 @@ class FakeLLM:
         return value
 
 
+def sample_llm(content: bytes, fmt: BookFormat) -> FakeLLM:
+    """Return a fake classifier for the invented story in the requested format."""
+    _, candidates = find_candidates(content, fmt)
+    return FakeLLM(lambda prompt: classify_like_an_llm(candidates))
+
+
 def classify_like_an_llm(candidates: list[Candidate]) -> dict[str, Any]:
-    """What a good model would answer for the sample story. Written WITHOUT the heuristic code,
-    so the LLM-map path is tested against its own expectations."""
+    """What a good model would answer for the invented sample story."""
     items: list[dict[str, Any]] = []
     part: str | None = None
     for index, cand in enumerate(candidates):
         text = cand.text
-        following = candidates[index + 1].text if index + 1 < len(candidates) else ""
+        next_cand = candidates[index + 1] if index + 1 < len(candidates) else None
+        following = next_cand.text if next_cand else ""
         parent: str | None = None
         if "gutenberg" in text.lower() or text.startswith("Licence"):
             role, kind = "license", "front"
@@ -51,12 +58,22 @@ def classify_like_an_llm(candidates: list[Candidate]) -> dict[str, Any]:
             role, kind, parent = "body_unit", "chapter", part
         else:
             role, kind = "front", "front"  # a subtitle such as "The Lamp"
+        title = text.title() if role == "part_heading" else text
+        if (
+            role in ("part_heading", "body_unit")
+            and next_cand is not None
+            and next_cand.kind == "heading"
+            and following
+            and not following.upper().startswith(("PART", "CHAPTER"))
+            and "licen" not in following.lower()
+        ):
+            title = f"{text.rstrip('. ')}: {following}"
         items.append(
             {
                 "cand_id": cand.cand_id,
                 "role": role,
                 "unit_kind": kind,
-                "title": text.title() if role == "part_heading" else text,
+                "title": title,
                 "parent_cand_id": parent,
             }
         )

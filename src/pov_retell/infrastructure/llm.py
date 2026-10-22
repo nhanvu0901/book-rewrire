@@ -1,10 +1,8 @@
-"""A minimal DeepSeek client: ask for JSON, validate it with Pydantic, retry with the error.
+"""A minimal OpenRouter client: ask for JSON, validate it with Pydantic, retry with the error.
 
 Why so small: phase A only needs ONE kind of call, "classify these candidates". The rules that
 matter are the same for every later LLM step too:
 
-- thinking is ALWAYS disabled (DeepSeek turns it on by default and it would bill reasoning
-  tokens we never read), so the client has no switch for it at all;
 - `json_object` mode, then Pydantic validation: the model's answer is untrusted input;
 - a wrong answer is retried at most twice, and the retry message carries the exact error, so
   the model can fix it instead of repeating it.
@@ -22,7 +20,6 @@ from pov_retell.config import Settings
 T = TypeVar("T", bound=BaseModel)
 
 MAX_RETRIES = 2  # extra attempts after the first answer
-MAX_TOKENS = 8192
 
 
 class LLMError(RuntimeError):
@@ -37,17 +34,16 @@ class JsonLLM(Protocol):
     ) -> T: ...
 
 
-class DeepSeekClient:
+class OpenRouterClient:
     def __init__(self, settings: Settings | None = None, client: OpenAI | None = None) -> None:
-        settings = settings or Settings()
-        self.model = settings.DEEPSEEK_MODEL
+        settings = settings or Settings()  # type: ignore[call-arg]  # required fields come from .env
+        self.model = settings.OPENROUTER_MODEL
+        self.max_tokens = settings.OPENROUTER_MAX_TOKENS
         if client is None:
-            key = settings.DEEPSEEK_API_KEY.get_secret_value()
+            key = settings.OPENROUTER_API_KEY.get_secret_value()
             if not key:
-                raise LLMError(
-                    "DEEPSEEK_API_KEY is not set (put it in ~/.config/book-clone/secrets.env)"
-                )
-            client = OpenAI(api_key=key, base_url=settings.DEEPSEEK_BASE_URL)
+                raise LLMError("OPENROUTER_API_KEY is not set (put it in .env)")
+            client = OpenAI(api_key=key, base_url=settings.OPENROUTER_BASE_URL)
         self._client = client
 
     def complete_json(
@@ -77,12 +73,19 @@ class DeepSeekClient:
                 model=self.model,
                 messages=messages,
                 response_format={"type": "json_object"},
-                extra_body={
-                    "thinking": {"type": "disabled"}
-                },  # never enabled, see module docstring
-                max_tokens=MAX_TOKENS,
+                max_tokens=self.max_tokens,
                 temperature=0,
             )
         except OpenAIError as exc:
-            raise LLMError(f"DeepSeek request failed: {exc}") from exc
-        return response.choices[0].message.content or ""
+            raise LLMError(f"OpenRouter request failed: {exc}") from exc
+        if not response.choices:
+            error = getattr(response, "error", None)
+            message = error.get("message") if isinstance(error, dict) else "no choices returned"
+            raise LLMError(f"OpenRouter request failed: {message}")
+        choice = response.choices[0]
+        if getattr(choice, "finish_reason", None) == "length":
+            raise LLMError(
+                f"OpenRouter response was truncated at OPENROUTER_MAX_TOKENS={self.max_tokens}; "
+                "increase this value in .env or reduce the requested output"
+            )
+        return choice.message.content or ""

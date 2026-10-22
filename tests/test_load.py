@@ -4,7 +4,7 @@ import httpx
 import pytest
 import samples
 
-from pov_retell.load import (
+from pov_retell.book.load import (
     Source,
     detect_format,
     load_source,
@@ -12,7 +12,7 @@ from pov_retell.load import (
     sha256_of,
     slugify,
 )
-from pov_retell.models import BookFormat
+from pov_retell.book.models import BookFormat
 
 
 @pytest.mark.parametrize("fmt", ["html", "epub", "txt"])

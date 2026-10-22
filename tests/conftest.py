@@ -1,18 +1,21 @@
-"""Shared fixtures. Tests never read the user's real secrets.env or data directory."""
+"""Shared fixtures. Opt-in integration tests alone use Neo4j or OpenRouter."""
 
 import os
 
 import pytest
 import samples
 
-from pov_retell.models import BookFormat
+from pov_retell.book.models import BookFormat
 
 # Tests that touch things outside the repo only run when asked for: marker -> switch.
-OPT_IN = {"local_books": "POV_LOCAL_BOOKS", "neo4j": "POV_NEO4J"}
+OPT_IN = {
+    "neo4j": "POV_NEO4J",
+    "openrouter": "POV_OPENROUTER",
+}
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """local_books reads real books from disk; neo4j writes to the dev Neo4j."""
+    """Skip tests that need Neo4j or a paid OpenRouter request by default."""
     for marker, switch in OPT_IN.items():
         if os.environ.get(switch) == "1":
             continue

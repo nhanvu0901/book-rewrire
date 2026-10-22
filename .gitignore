@@ -11,3 +11,4 @@ secrets.env
 books/
 extracted/
 projects/
+/book/

@@ -5,19 +5,24 @@ from pathlib import Path
 
 import pytest
 import samples
-from fakes import FakeLLM, classify_like_an_llm
+from fakes import sample_llm
 from typer.testing import CliRunner
 
-from pov_retell.candidates import find_candidates
-from pov_retell.cli import app
-from pov_retell.load import Source
-from pov_retell.models import SCHEMA_VERSION, BookFormat
-from pov_retell.output import BookIdConflictError, load_extraction, save_extraction
-from pov_retell.pipeline import extract_book
+from pov_retell import cli
+from pov_retell.book.load import Source
+from pov_retell.book.models import SCHEMA_VERSION, BookFormat, ExtractedBook
+from pov_retell.book.output import BookIdConflictError, load_extraction, save_extraction
+from pov_retell.book.pipeline import extract_book
+
+app = cli.app
 
 
-def extract(fmt: BookFormat, content: bytes, **kwargs: object):  # type: ignore[no-untyped-def]
-    return extract_book(Source(content, f"lantern.{fmt}", f"/tmp/lantern.{fmt}"), **kwargs)  # type: ignore[arg-type]
+def extract(fmt: BookFormat, content: bytes, book_id: str | None = None) -> ExtractedBook:
+    return extract_book(
+        Source(content, f"lantern.{fmt}", f"/tmp/lantern.{fmt}"),
+        sample_llm(content, fmt),
+        book_id=book_id,
+    )
 
 
 @pytest.mark.parametrize("fmt", ["html", "epub", "txt"])
@@ -25,7 +30,7 @@ def test_each_format_ends_with_the_same_units_and_paragraphs(
     fmt: BookFormat, sample_bytes: dict[BookFormat, bytes]
 ) -> None:
     result = extract(fmt, sample_bytes[fmt])
-    assert result.map_method == "heuristic"
+    assert result.map_method == "llm"
     assert result.book.format == fmt and result.book.id == "the-lantern-keeper"
     assert [(u.kind, u.parent_id) for u in result.units] == samples.EXPECTED_UNITS
     assert [p.text for p in result.paragraphs] == [
@@ -34,14 +39,13 @@ def test_each_format_ends_with_the_same_units_and_paragraphs(
     assert result.warnings == []
 
 
-def test_the_llm_map_is_optional_and_needs_a_client(sample_bytes: dict[BookFormat, bytes]) -> None:
-    with pytest.raises(ValueError, match="needs an LLM client"):
-        extract("txt", sample_bytes["txt"], map_method="llm")
-    _, candidates = find_candidates(sample_bytes["txt"], "txt")
-    llm = FakeLLM(lambda prompt: classify_like_an_llm(candidates))
-    result = extract("txt", sample_bytes["txt"], map_method="llm", llm=llm)
+def test_the_llm_map_is_used_for_extraction(sample_bytes: dict[BookFormat, bytes]) -> None:
+    content = sample_bytes["txt"]
+    llm = sample_llm(content, "txt")
+    result = extract_book(Source(content, "lantern.txt", "x"), llm)
     assert result.map_method == "llm"
     assert [(u.kind, u.parent_id) for u in result.units] == samples.EXPECTED_UNITS
+    assert len(llm.prompts) == 1
 
 
 def test_book_id_can_be_chosen(sample_bytes: dict[BookFormat, bytes]) -> None:
@@ -95,6 +99,14 @@ def test_saved_book_loads_back_and_unit_files_do_not_go_stale(
     assert loaded.units == result.units and loaded.paragraphs == result.paragraphs
 
 
+def test_an_existing_heuristic_extraction_remains_readable(
+    tmp_path: Path, sample_bytes: dict[BookFormat, bytes]
+) -> None:
+    legacy = extract("txt", sample_bytes["txt"]).model_copy(update={"map_method": "heuristic"})
+    save_extraction(legacy, tmp_path)
+    assert load_extraction(tmp_path, "the-lantern-keeper").map_method == "heuristic"
+
+
 def test_a_different_file_under_the_same_id_is_refused(
     tmp_path: Path, sample_bytes: dict[BookFormat, bytes]
 ) -> None:
@@ -119,6 +131,9 @@ def test_cli_extract_then_show(
     monkeypatch.setenv("BOOK_CLONE_DATA_DIR", str(tmp_path / "data"))
     source = tmp_path / "lantern.epub"
     source.write_bytes(sample_bytes["epub"])
+    monkeypatch.setattr(
+        cli, "OpenRouterClient", lambda settings: sample_llm(sample_bytes["epub"], "epub")
+    )
     runner = CliRunner()
 
     done = runner.invoke(app, ["extract", str(source)])
@@ -139,8 +154,11 @@ def test_cli_errors_are_short_messages_not_tracebacks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("BOOK_CLONE_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr(cli, "OpenRouterClient", lambda settings: sample_llm(b"x", "txt"))
     runner = CliRunner()
     assert "Error:" in runner.invoke(app, ["extract", str(tmp_path / "missing.txt")]).output
     assert "run `pov extract` first" in runner.invoke(app, ["show", "nope"]).output
-    no_key = runner.invoke(app, ["extract", str(tmp_path), "--map", "llm"])
-    assert no_key.exit_code == 1 and "Error:" in no_key.output
+    monkeypatch.undo()
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    no_key = runner.invoke(app, ["extract", str(tmp_path)])
+    assert no_key.exit_code == 1 and "OPENROUTER_API_KEY" in no_key.output

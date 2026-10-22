@@ -1,6 +1,6 @@
 """Step A2c: cut the canonical text into units exactly where the structure map says, and VALIDATE.
 
-Code cuts and checks; the map (heuristic or LLM) only chose which candidates are boundaries.
+Code cuts and checks; the LLM map only chooses which candidates are boundaries.
 The units form ONE contiguous partition of the story body, in reading order:
 
     PART ONE | CHAPTER I | CHAPTER II | PART TWO | CHAPTER III
@@ -13,7 +13,7 @@ A bad map is REJECTED with a clear error, never silently repaired: a wrong cut m
 later step wrong, so it is better to stop here.
 """
 
-from pov_retell.models import NARRATIVE_KINDS, Candidate, MapItem, Unit, UnitKind
+from pov_retell.book.models import NARRATIVE_KINDS, Candidate, MapItem, Unit, UnitKind
 
 
 class StructureMapError(ValueError):

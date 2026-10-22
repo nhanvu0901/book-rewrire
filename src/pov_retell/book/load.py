@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-from pov_retell.models import Book, BookFormat
+from pov_retell.book.models import Book, BookFormat
 
 MAX_BYTES = 100 * 1024 * 1024
 HEAD_BYTES = 256 * 1024  # Gutenberg HTML carries a long inline <style> before its <meta> tags

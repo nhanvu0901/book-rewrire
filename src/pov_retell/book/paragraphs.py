@@ -9,8 +9,8 @@ Flags do not remove anything: they tell the human where the extraction may have 
 
 import re
 
-from pov_retell.models import NARRATIVE_KINDS, Candidate, Paragraph, Unit
-from pov_retell.text import iter_blocks
+from pov_retell.book.models import NARRATIVE_KINDS, Candidate, Paragraph, Unit
+from pov_retell.book.text import iter_blocks
 
 TOO_SHORT_CHARS = 10
 TOO_LONG_CHARS = 3000

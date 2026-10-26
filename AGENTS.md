@@ -19,7 +19,8 @@
   edit application code, tests, prompts or settings. See `AI-work/agents/product-manager.md`.
 - Other agents implement tickets from `AI-work/tickets/`, following
   `AI-work/agents/ticket-implementer.md`.
-- Every ticket has its own branch `ticket/T-NNNN-short-slug`. Every code change and every
+- Every ticket starts with `git fetch origin` and `git pull --ff-only origin main`. It then
+  gets its own branch `ticket/T-NNNN-short-slug` from `main`. Every code change and every
   review is committed on it. Merge or push only when the user asks. See
   `AI-work/tickets/README.md` (Branches and commits). When a ticket is done, mark it `done` and tell the
   user; the user asks Claude to review it.

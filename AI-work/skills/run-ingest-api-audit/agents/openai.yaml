@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ingest API Audit"
+  short_description: "Monitor summary and character API runs with Terra"
+  default_prompt: "Use $run-ingest-api-audit to run an authorized summarize and character-extraction test, have Terra monitor it, and report errors and suggested fixes without changing the application."

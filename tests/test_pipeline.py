@@ -125,9 +125,17 @@ def test_an_unknown_schema_version_is_refused(tmp_path: Path) -> None:
 # ----------------------------------------------------------------- the command line
 
 
+def _set_extract_client_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_EXTRACT_CHARACTER_PROVIDER", "open-inference/fp4")
+    monkeypatch.setenv("OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS", "false")
+    monkeypatch.setenv("OPENROUTER_EXTRACT_CHARACTER_REASONING", "enabled")
+    monkeypatch.setenv("OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS", "true")
+
+
 def test_cli_extract_then_show(
     tmp_path: Path, sample_bytes: dict[BookFormat, bytes], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    _set_extract_client_env(monkeypatch)
     monkeypatch.setenv("BOOK_CLONE_DATA_DIR", str(tmp_path / "data"))
     source = tmp_path / "lantern.epub"
     source.write_bytes(sample_bytes["epub"])
@@ -153,12 +161,14 @@ def test_cli_extract_then_show(
 def test_cli_errors_are_short_messages_not_tracebacks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    _set_extract_client_env(monkeypatch)
     monkeypatch.setenv("BOOK_CLONE_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setattr(cli, "OpenRouterClient", lambda settings: sample_llm(b"x", "txt"))
     runner = CliRunner()
     assert "Error:" in runner.invoke(app, ["extract", str(tmp_path / "missing.txt")]).output
     assert "run `pov extract` first" in runner.invoke(app, ["show", "nope"]).output
     monkeypatch.undo()
+    _set_extract_client_env(monkeypatch)
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
     no_key = runner.invoke(app, ["extract", str(tmp_path)])
     assert no_key.exit_code == 1 and "OPENROUTER_API_KEY" in no_key.output

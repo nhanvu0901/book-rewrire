@@ -1,7 +1,7 @@
 """Command line.
 
 Phase A:  `pov extract <file|url>`   `pov show <book_id>`
-Ingest:   `pov ingest <book_id>`   `pov neo4j-status`
+Ingest:   `pov ingest <book_id> [--no-neo4j]`   `pov neo4j-status`
 """
 
 from collections import Counter
@@ -23,10 +23,11 @@ from pov_retell.infrastructure.neo4j_store import (
     check_health,
     connect,
 )
+from pov_retell.ingest.model import IngestResult
 from pov_retell.ingest.pipeline import ingest_book
 
 app = typer.Typer(
-    help="Book extraction and character discovery with OpenRouter and Neo4j. See README.md.",
+    help="Extract books and characters with OpenRouter and Neo4j. See README.md.",
     no_args_is_help=True,
 )
 
@@ -63,21 +64,44 @@ def extract(
 @app.command()
 def ingest(
     book_id: str = typer.Argument(..., help="Book id of an extraction made by `pov extract`"),
+    neo4j: bool = typer.Option(
+        True, "--neo4j/--no-neo4j", help="Write Character nodes to Neo4j after the last chapter"
+    ),
 ) -> None:
-    """Discover characters and save chapter JSON and Neo4j Character nodes."""
+    """Summarize chapters, extract characters, save JSON and optionally Neo4j nodes."""
     settings = Settings()  # type: ignore[call-arg]
+
+    def run(writer: Neo4jCharacterWriter | None) -> IngestResult:
+        return ingest_book(
+            book_id,
+            OpenRouterClient(
+                settings,
+                model=settings.OPENROUTER_EXTRACT_CHARACTER_MODEL,
+                max_tokens_setting="OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS",
+                provider=settings.OPENROUTER_EXTRACT_CHARACTER_PROVIDER,
+                allow_fallbacks=settings.OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS,
+                reasoning=settings.OPENROUTER_EXTRACT_CHARACTER_REASONING,
+                structured_outputs=settings.OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS,
+            ),
+            writer,
+            summary_llm=OpenRouterClient(
+                settings,
+                model=settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL,
+                max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
+            ),
+            extracted_dir=settings.extracted_dir,
+            ingest_dir=settings.BOOK_CLONE_DATA_DIR / "ingest",
+            on_step=typer.echo,
+        )
+
     try:
-        driver = connect(settings)
-        with driver:
-            check_health(driver)
-            result = ingest_book(
-                book_id,
-                OpenRouterClient(settings),
-                Neo4jCharacterWriter(driver),
-                extracted_dir=settings.extracted_dir,
-                ingest_dir=settings.BOOK_CLONE_DATA_DIR / "ingest",
-                on_step=typer.echo,
-            )
+        if neo4j:
+            driver = connect(settings)
+            with driver:
+                check_health(driver)
+                result = run(Neo4jCharacterWriter(driver))
+        else:
+            result = run(None)
     except (Neo4jUnavailable, Neo4jError, LLMError, OSError, ValueError) as exc:
         _fail(str(exc))
     typer.echo(f"Ingested {book_id}: {result.character_count} characters (run {result.run_id})")

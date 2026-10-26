@@ -1,0 +1,13 @@
+GSAP (GreenSock Animation Platform) 3.12.5
+File: gsap.min.js, downloaded unmodified from https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js
+Copyright 2024, GreenSock. All rights reserved.
+
+The npm package does not include a separate license file. Its package.json states:
+  "Standard 'no charge' license: https://gsap.com/standard-license"
+
+The license header kept at the top of gsap.min.js reads:
+  "Subject to the terms at https://gsap.com/standard-license or for Club GSAP members,
+   the agreement issued with that membership."
+
+The binding terms are the ones published at https://gsap.com/standard-license.
+This file is a pointer to them, not a copy.

@@ -1,0 +1,2453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Same story. Different eyes. — ShiftKey Presentation</title>
+<style>
+  @font-face {
+    font-family: "KaushanScriptLocal";
+    src: url("assets/fonts/KaushanScript-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+  }
+
+  :root {
+    --bg-stage: #060916;
+    --bg-panel: #0f172a;
+    --bg-card: #162038;
+    --bg-chip: #1e293b;
+    --border-muted: #334155;
+    --border-bright: #64748b;
+    --text-main: #f8fafc;
+    --text-muted: #cbd5e1;
+    --text-dim: #94a3b8;
+    --accent: #fbbf24;
+    --accent-glow: rgba(251, 191, 36, 0.36);
+    --known: #34d399;
+    --known-text: #6ee7b7;
+    --false-stroke: #fb7185;
+    --false-text: #fda4af;
+    --gryffindor-red: #ef4444;
+    --gryffindor-gold: #fbbf24;
+    --slytherin-green: #10b981;
+    --slytherin-silver: #cbd5e1;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-script: "KaushanScriptLocal", "Brush Script MT", cursive;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+  }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #03050c;
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #viewport {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #stage {
+    width: 1920px;
+    height: 1080px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 24%, #131d3d 0%, #090e24 55%, #050814 100%);
+    transform-origin: center center;
+    box-shadow: 0 0 80px rgba(0, 0, 0, 0.92);
+  }
+
+  #starry-sky {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Strict 3-size typography system at 1920x1080: 72px title, 34px body, 24px caption */
+  .t-title {
+    font-size: 72px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+  }
+
+  .t-script {
+    font-family: var(--font-script);
+    font-size: 72px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    text-shadow: 0 0 24px rgba(251, 191, 36, 0.35);
+    padding: 0 8px;
+  }
+
+  .t-body {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.28;
+    color: var(--text-main);
+  }
+
+  .t-caption {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-muted);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Slide containers */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    z-index: 5;
+  }
+
+  .screen.active {
+    display: block;
+  }
+
+  /* Headings aligned at left: 96px, top: 64px for slides 2-5 */
+  .screen-title {
+    position: absolute;
+    left: 96px;
+    top: 64px;
+    margin: 0;
+  }
+
+  /* Banner for the ShiftKey prompt */
+  .prompt-banner {
+    position: absolute;
+    left: 96px;
+    top: 152px;
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 24px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 2px solid var(--accent);
+    border-radius: 14px;
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .prompt-label {
+    color: var(--accent);
+  }
+
+  /* Answer line alongside/under prompt */
+  .answer-line {
+    position: absolute;
+    left: 96px;
+    top: 220px;
+    color: var(--text-main);
+  }
+
+  /* Content area */
+  .content-box {
+    position: absolute;
+    left: 96px;
+    right: 96px;
+    top: 284px;
+    bottom: 112px;
+  }
+
+  /* Circular head-and-shoulders portrait crop */
+  .portrait-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #131d38;
+    position: relative;
+    flex-shrink: 0;
+    border: 3px solid var(--border-bright);
+  }
+
+  .portrait-circle.house-gryffindor {
+    border-color: var(--gryffindor-red);
+    box-shadow: inset 0 0 0 2px var(--gryffindor-gold), 0 4px 12px rgba(0, 0, 0, 0.55);
+  }
+
+  .portrait-circle.house-slytherin {
+    border-color: var(--slytherin-green);
+    box-shadow: inset 0 0 0 2px var(--slytherin-silver), 0 4px 12px rgba(0, 0, 0, 0.55);
+  }
+
+  .portrait-circle.house-neutral {
+    border-color: #a855f7;
+    box-shadow: inset 0 0 0 2px #d8b4fe, 0 4px 12px rgba(0, 0, 0, 0.55);
+  }
+
+  .portrait-circle img {
+    width: 100%;
+    height: 235%;
+    object-fit: cover;
+    object-position: 50% 4%;
+    display: block;
+    pointer-events: none;
+  }
+
+  .portrait-circle.xs {
+    width: 52px;
+    height: 52px;
+    border-width: 2px;
+  }
+
+  /* Top-right active narrator HUD indicator */
+  #hud-narrator {
+    position: absolute;
+    right: 96px;
+    top: 64px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: rgba(15, 23, 42, 0.94);
+    border: 2px solid var(--accent);
+    border-radius: 20px;
+    box-shadow: 0 0 24px var(--accent-glow);
+    z-index: 25;
+  }
+
+  .hud-badge {
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: #3b2804;
+    border: 1.5px solid var(--accent);
+    color: var(--accent);
+  }
+
+  /* Narrator quick switcher row (no instruction words, only portraits + names) */
+  .narrator-nav-bar {
+    position: absolute;
+    right: 96px;
+    top: 64px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 25;
+  }
+
+  .narrator-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.88);
+    border: 2px solid var(--border-muted);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .narrator-nav-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #1e293b;
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+
+  /* ==================== SLIDE 1: TITLE & CHARACTER SELECT ==================== */
+  #slide1-stage-a {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 36px;
+  }
+
+  #slide1-stage-b {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .screen[data-screen="1"].state-b #slide1-stage-a {
+    display: none;
+  }
+
+  .screen[data-screen="1"].state-b #slide1-stage-b {
+    display: flex;
+  }
+
+  .title-hero-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .title-pinned-bar {
+    width: 1728px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 0 12px;
+    border-bottom: 2px solid var(--border-muted);
+  }
+
+  .s1-script-header {
+    margin-top: 18px;
+    text-align: center;
+  }
+
+  /* 4 Character plates grid */
+  .roster-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 390px);
+    gap: 36px;
+    justify-content: center;
+    align-items: end;
+    height: 680px;
+    padding-bottom: 20px;
+  }
+
+  .character-slot {
+    position: relative;
+    height: 660px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .feet-glow {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.85);
+    width: 260px;
+    height: 76px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(251, 191, 36, 0.65) 0%, rgba(251, 191, 36, 0.18) 52%, transparent 75%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .character-figure {
+    position: relative;
+    z-index: 4;
+    height: 480px;
+    margin-bottom: -24px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    transform-origin: 50% 95%;
+    pointer-events: none;
+    filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.72));
+  }
+
+  .character-figure img {
+    height: 100%;
+    width: auto;
+    display: block;
+    pointer-events: none;
+  }
+
+  .slot-fx-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+    overflow: visible;
+  }
+
+  .name-plate {
+    position: relative;
+    z-index: 3;
+    width: 100%;
+    min-height: 136px;
+    padding: 22px 20px 18px;
+    background: rgba(15, 25, 52, 0.86);
+    border: 3px solid #e2e8f0;
+    border-radius: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.65);
+  }
+
+  .character-slot.house-gryffindor .name-plate {
+    box-shadow: inset 0 0 0 2.5px var(--gryffindor-red), 0 0 0 1.5px var(--gryffindor-gold), 0 14px 32px rgba(0, 0, 0, 0.65);
+  }
+
+  .character-slot.house-slytherin .name-plate {
+    box-shadow: inset 0 0 0 2.5px var(--slytherin-green), 0 0 0 1.5px var(--slytherin-silver), 0 14px 32px rgba(0, 0, 0, 0.65);
+  }
+
+  .character-slot.house-neutral .name-plate {
+    box-shadow: inset 0 0 0 2.5px #a855f7, 0 0 0 1.5px #d8b4fe, 0 14px 32px rgba(0, 0, 0, 0.65);
+  }
+
+  .character-slot.selected .name-plate {
+    border-color: var(--accent);
+    background: rgba(23, 37, 74, 0.94);
+    box-shadow: 0 0 34px var(--accent-glow), inset 0 0 0 3px var(--accent);
+  }
+
+  .ready-badge {
+    position: absolute;
+    top: -18px;
+    right: 20px;
+    padding: 2px 14px;
+    border-radius: 10px;
+    background: #451a03;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    opacity: 0;
+    z-index: 6;
+  }
+
+  .character-slot.selected .ready-badge {
+    opacity: 1;
+  }
+
+  .plate-name {
+    color: #f8fafc;
+    text-align: center;
+  }
+
+  .plate-tag {
+    color: var(--accent);
+    text-align: center;
+    opacity: 0;
+  }
+
+  .character-slot.selected .plate-tag,
+  .character-slot.hovered .plate-tag {
+    opacity: 1;
+  }
+
+  /* Static character plates row for State A */
+  .static-roster-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 48px;
+    height: 480px;
+  }
+
+  .static-character-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 280px;
+  }
+
+  .static-figure {
+    height: 380px;
+    margin-bottom: -20px;
+    filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.72));
+  }
+
+  .static-figure img {
+    height: 100%;
+    width: auto;
+  }
+
+  .static-plate {
+    width: 100%;
+    padding: 16px;
+    background: rgba(15, 25, 52, 0.86);
+    border: 2px solid var(--border-bright);
+    border-radius: 18px;
+    text-align: center;
+  }
+
+  /* ==================== SLIDE 2: SPRINT 1 (TRAPDOOR 6 ROOMS) ==================== */
+  .trapdoor-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .rooms-track {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 24px;
+    height: 560px;
+    position: relative;
+  }
+
+  .room-card {
+    background: rgba(15, 23, 42, 0.92);
+    border: 3px solid var(--border-muted);
+    border-radius: 20px;
+    padding: 24px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .room-card.lit {
+    border-color: var(--accent);
+    background: linear-gradient(180deg, rgba(251, 191, 36, 0.08) 0%, rgba(15, 23, 42, 0.94) 100%);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  .room-card.fogged {
+    border: 2px dashed #64748b;
+    background: rgba(10, 15, 28, 0.94);
+    opacity: 1;
+  }
+
+  .room-card.fogged .room-title,
+  .room-card.fogged .room-status {
+    color: #94a3b8;
+  }
+
+  .room-card.known-not-seen {
+    border: 3px dashed var(--accent);
+    background: linear-gradient(180deg, rgba(251, 191, 36, 0.12) 0%, rgba(15, 23, 42, 0.94) 100%);
+    opacity: 1;
+  }
+
+  .room-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--border-muted);
+    padding-bottom: 12px;
+  }
+
+  .room-icon-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .room-title {
+    margin-top: 14px;
+    min-height: 72px;
+  }
+
+  .room-occupants {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 80px;
+    margin-top: auto;
+    padding: 12px 0;
+  }
+
+  .room-status-badge {
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-bright);
+    text-align: center;
+  }
+
+  .room-card.lit .room-status-badge {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .room-card.known-not-seen .room-status-badge {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .stop-marker-banner {
+    position: absolute;
+    bottom: 24px;
+    left: 12px;
+    right: 12px;
+    padding: 10px;
+    background: #451a03;
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    color: var(--accent);
+    text-align: center;
+    box-shadow: 0 0 16px var(--accent-glow);
+    z-index: 10;
+  }
+
+  .sprint1-summary-bar {
+    height: 76px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 2px solid var(--border-bright);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+  }
+
+  /* Flip card for Harry's room 6 */
+  .flip-box {
+    perspective: 1000px;
+    width: 100%;
+    height: 80px;
+  }
+
+  .flip-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+  }
+
+  .flip-box.flipped .flip-inner {
+    transform: rotateY(180deg);
+  }
+
+  .flip-front, .flip-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .flip-back {
+    transform: rotateY(180deg);
+  }
+
+  /* ==================== SLIDE 3: SPRINT 2 (KNOWLEDGE INVENTORY) ==================== */
+  .sprint2-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .time-tabs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .time-tabs {
+    display: inline-flex;
+    background: rgba(15, 23, 42, 0.92);
+    border: 2px solid var(--border-bright);
+    border-radius: 16px;
+    padding: 6px;
+    gap: 8px;
+  }
+
+  .time-tab {
+    padding: 12px 32px;
+    border-radius: 12px;
+    background: transparent;
+    border: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .time-tab.active {
+    background: var(--bg-card);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+
+  .toast-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 24px;
+    background: #064e3b;
+    border: 2px solid var(--known);
+    border-radius: 16px;
+    color: var(--known-text);
+  }
+
+  .inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+    height: 500px;
+  }
+
+  .inv-slot {
+    background: rgba(15, 23, 42, 0.92);
+    border: 3px solid var(--border-muted);
+    border-radius: 24px;
+    padding: 36px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .inv-slot.slot-known {
+    border-color: var(--known);
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.94) 100%);
+  }
+
+  .inv-slot.slot-false {
+    border-color: var(--false-stroke);
+    background: linear-gradient(180deg, rgba(244, 63, 94, 0.16) 0%, rgba(15, 23, 42, 0.94) 100%);
+  }
+
+  .inv-slot.slot-key {
+    border-color: var(--accent);
+    background: linear-gradient(180deg, rgba(251, 191, 36, 0.18) 0%, rgba(15, 23, 42, 0.94) 100%);
+  }
+
+  .inv-slot.slot-unknown {
+    border-style: dashed;
+    border-color: var(--border-bright);
+  }
+
+  .inv-slot-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .strike-claim {
+    text-decoration: line-through;
+    text-decoration-thickness: 3px;
+    text-decoration-color: var(--false-stroke);
+    color: var(--false-text);
+  }
+
+  .inventory-rule-footer {
+    height: 72px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 2px solid var(--border-bright);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+  }
+
+  /* ==================== SLIDE 4: SPRINT 3 (WORLD MAP) ==================== */
+  .map-board {
+    position: relative;
+    width: 100%;
+    height: 660px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 3px solid var(--border-muted);
+    border-radius: 24px;
+    overflow: hidden;
+  }
+
+  .db-only {
+    display: none;
+  }
+
+  body.show-db-terms .db-only {
+    display: block;
+  }
+
+  .map-rule-bar {
+    position: absolute;
+    left: 36px;
+    right: 36px;
+    bottom: 24px;
+    height: 76px;
+    background: #172033;
+    border: 3px solid var(--accent);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 36px;
+    box-shadow: 0 0 28px var(--accent-glow);
+  }
+
+  /* ==================== SLIDE 5: WHAT'S NEXT FOR ME ==================== */
+  .sprint-next-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .lesson-banner {
+    height: 80px;
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.18) 0%, rgba(15, 23, 42, 0.92) 100%);
+    border: 3px solid var(--accent);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+    box-shadow: 0 0 24px var(--accent-glow);
+  }
+
+  .levels-track {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    height: 220px;
+  }
+
+  .level-card {
+    background: rgba(15, 23, 42, 0.92);
+    border: 3px solid var(--border-muted);
+    border-radius: 20px;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .level-card.cleared {
+    border-color: var(--known);
+  }
+
+  .level-card.in-progress {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .level-card.locked {
+    border-style: dashed;
+    border-color: var(--border-bright);
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    padding: 4px 14px;
+    border-radius: 10px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-bright);
+  }
+
+  .level-card.cleared .status-pill {
+    border-color: var(--known);
+    color: var(--known-text);
+  }
+
+  .level-card.in-progress .status-pill {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .level-bar-bg {
+    width: 100%;
+    height: 14px;
+    background: #0b0f17;
+    border: 2px solid var(--border-bright);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .level-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .quest-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .quest-chip {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 24px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 2px solid var(--border-bright);
+    border-radius: 16px;
+    color: var(--text-main);
+  }
+
+  .replay-roster-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.92);
+    border: 2px solid var(--border-bright);
+    border-radius: 20px;
+    padding: 16px 32px;
+  }
+
+  .replay-mini-grid {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .replay-character-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 24px;
+    border-radius: 14px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-muted);
+    color: var(--text-main);
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+
+  .replay-character-btn:hover {
+    border-color: var(--accent);
+    transform: translateY(-4px);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+
+  /* Build step visibility */
+  .build-step {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .build-step.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* HUD Footer on every screen */
+  #hud-footer {
+    position: absolute;
+    left: 96px;
+    right: 96px;
+    bottom: 28px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 20;
+  }
+
+  .hud-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .hud-xp-wrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .hud-xp-bar {
+    width: 420px;
+    height: 16px;
+    background: var(--bg-panel);
+    border: 2px solid var(--border-bright);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  #hud-xp-fill {
+    height: 100%;
+    width: 20%;
+    background: linear-gradient(90deg, #f59e0b 0%, #34d399 100%);
+    transition: width 0.3s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    .build-step {
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <main id="stage">
+    <!-- Starry night sky canvas -->
+    <canvas id="starry-sky" width="1920" height="1080"></canvas>
+
+    <!-- Top right HUD active narrator badge (visible on slides 2-5) -->
+    <div id="hud-narrator" style="display: none;">
+      <div id="hud-portrait" class="portrait-circle xs house-gryffindor">
+        <img id="hud-portrait-img" src="assets/characters/harry.webp" alt="Harry">
+      </div>
+      <span id="hud-name" class="t-caption">Harry Potter</span>
+      <span class="hud-badge t-caption mono">ACTIVE VIEWPOINT</span>
+    </div>
+
+    <!-- Quick narrator switcher on slides 3 and 4 -->
+    <div id="narrator-switcher-bar" class="narrator-nav-bar" style="display: none;">
+      <button type="button" class="narrator-nav-btn t-caption mono" data-nav-narrator="harry">
+        <span class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></span>
+        <span>Harry</span>
+      </button>
+      <button type="button" class="narrator-nav-btn t-caption mono" data-nav-narrator="hermione">
+        <span class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></span>
+        <span>Hermione</span>
+      </button>
+      <button type="button" class="narrator-nav-btn t-caption mono" data-nav-narrator="ron">
+        <span class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></span>
+        <span>Ron</span>
+      </button>
+      <button type="button" class="narrator-nav-btn t-caption mono" data-nav-narrator="quirrell">
+        <span class="portrait-circle xs house-neutral"><img src="assets/characters/quirrell.webp" alt="Quirrell"></span>
+        <span>Quirrell</span>
+      </button>
+      <button type="button" class="narrator-nav-btn t-caption mono" data-nav-narrator="snape">
+        <span class="portrait-circle xs house-slytherin"><img src="assets/characters/snape.webp" alt="Snape"></span>
+        <span>Snape</span>
+      </button>
+    </div>
+
+    <!-- ==================== SLIDE 1: TITLE & CHARACTER SELECT ==================== -->
+    <section class="screen active" data-screen="1" data-time="45"
+      data-notes="Hello everyone, I'm Vu Trong Nhan. I'm presenting 'Same story. Different eyes.', a project in Build It! Machine Learning, Fall 2026. The goal of this project is to retell any book through any character's eyes, knowing strictly only what that character perceived and experienced. Why does this matter? Because real narrative understanding requires modeling subjective perspectives, not omniscient knowledge. Choose a character below to explore their point of view. Click a character or press keys 1 to 4; enter or arrow right continues.">
+      
+      <!-- State A: Hero presentation intro -->
+      <div id="slide1-stage-a">
+        <div class="title-hero-box">
+          <h1 class="t-title">Same story. Different eyes.</h1>
+          <p class="t-body" style="color: var(--accent);">Vu Trong Nhan</p>
+          <p class="t-caption mono" style="color: var(--text-muted);">Build It! Machine Learning · Fall 2026</p>
+        </div>
+
+        <div class="static-roster-row">
+          <div class="static-character-card">
+            <div class="static-figure"><img src="assets/characters/harry.webp" alt="Harry"></div>
+            <div class="static-plate t-caption mono">Harry Potter</div>
+          </div>
+          <div class="static-character-card">
+            <div class="static-figure"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+            <div class="static-plate t-caption mono">Hermione Granger</div>
+          </div>
+          <div class="static-character-card">
+            <div class="static-figure"><img src="assets/characters/ron.webp" alt="Ron"></div>
+            <div class="static-plate t-caption mono">Ron Weasley</div>
+          </div>
+          <div class="static-character-card">
+            <div class="static-figure"><img src="assets/characters/quirrell.webp" alt="Quirrell"></div>
+            <div class="static-plate t-caption mono">Professor Quirrell</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- State B: Choose Your Character (Build step 1) -->
+      <div id="slide1-stage-b">
+        <div class="title-pinned-bar">
+          <span class="t-body">Same story. Different eyes.</span>
+          <span class="t-caption" style="color: var(--accent);">Vu Trong Nhan</span>
+          <span class="t-caption mono" style="color: var(--text-muted);">Build It! Machine Learning · Fall 2026</span>
+        </div>
+
+        <div class="s1-script-header">
+          <h2 class="t-title">Choose Your <span class="t-script">Character</span></h2>
+        </div>
+
+        <div class="roster-grid">
+          <!-- Harry -->
+          <div class="character-slot house-gryffindor" tabindex="0" data-character="harry">
+            <div class="feet-glow"></div>
+            <div class="character-figure"><img src="assets/characters/harry.webp" alt="Harry Potter"></div>
+            <svg class="slot-fx-svg" viewBox="0 0 390 660" aria-hidden="true"></svg>
+            <div class="name-plate">
+              <span class="ready-badge t-caption mono">READY</span>
+              <span class="plate-name t-body">Harry Potter</span>
+              <span class="plate-tag t-caption mono">The Seeker</span>
+            </div>
+          </div>
+
+          <!-- Hermione -->
+          <div class="character-slot house-gryffindor" tabindex="0" data-character="hermione">
+            <div class="feet-glow"></div>
+            <div class="character-figure"><img src="assets/characters/hermione.webp" alt="Hermione Granger"></div>
+            <svg class="slot-fx-svg" viewBox="0 0 390 660" aria-hidden="true"></svg>
+            <div class="name-plate">
+              <span class="ready-badge t-caption mono">READY</span>
+              <span class="plate-name t-body">Hermione Granger</span>
+              <span class="plate-tag t-caption mono">The Scholar</span>
+            </div>
+          </div>
+
+          <!-- Ron -->
+          <div class="character-slot house-gryffindor" tabindex="0" data-character="ron">
+            <div class="feet-glow"></div>
+            <div class="character-figure"><img src="assets/characters/ron.webp" alt="Ron Weasley"></div>
+            <svg class="slot-fx-svg" viewBox="0 0 390 660" aria-hidden="true"></svg>
+            <div class="name-plate">
+              <span class="ready-badge t-caption mono">READY</span>
+              <span class="plate-name t-body">Ron Weasley</span>
+              <span class="plate-tag t-caption mono">The Strategist</span>
+            </div>
+          </div>
+
+          <!-- Quirrell -->
+          <div class="character-slot house-neutral" tabindex="0" data-character="quirrell">
+            <div class="feet-glow"></div>
+            <div class="character-figure"><img src="assets/characters/quirrell.webp" alt="Professor Quirrell"></div>
+            <svg class="slot-fx-svg" viewBox="0 0 390 660" aria-hidden="true"></svg>
+            <div class="name-plate">
+              <span class="ready-badge t-caption mono">READY</span>
+              <span class="plate-name t-body">Professor Quirrell</span>
+              <span class="plate-tag t-caption mono">Carries a secret</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 2: SPRINT 1 (WORLD MAP) ==================== -->
+    <section class="screen" data-screen="2" data-time="70"
+      data-notes="We compared tools and picked models and providers on OpenRouter. The key idea: do not ask one model for everything. Split the story into small pieces (characters, places, events, what was said, who learned what) and connect them in a graph. Walk through the map step by step. T shows the database names.">
+      
+      <h1 class="screen-title t-title">Sprint 1</h1>
+      <div class="prompt-banner">
+        <span class="prompt-label t-caption mono">PROMPT:</span>
+        <span class="t-caption">What did you accomplish?</span>
+      </div>
+      <p class="answer-line t-body">Chose the tools, then split a story into small pieces.</p>
+
+      <div class="content-box">
+        <div class="map-board">
+          <svg width="1728" height="660" viewBox="0 0 1728 660" aria-label="Story knowledge graph">
+            <defs>
+              <marker id="arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1 L 9 5 L 0 9 z" fill="#94a3b8"/>
+              </marker>
+              <marker id="arr-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1 L 9 5 L 0 9 z" fill="#fbbf24"/>
+              </marker>
+              <marker id="arr-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1 L 9 5 L 0 9 z" fill="#fb7185"/>
+              </marker>
+              <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399"/>
+              </marker>
+              <clipPath id="clip-circle-50">
+                <circle cx="0" cy="0" r="50"/>
+              </clipPath>
+            </defs>
+
+            <!-- STEP 1: Harry, Snape, RELATES_TO "distrusts" -->
+            <g class="build-step" data-step="1">
+              <!-- Edge Harry -> Snape -->
+              <path d="M 178 65 Q 590 10 992 65" fill="none" stroke="#fbbf24" stroke-width="3.5" marker-end="url(#arr-gold)"/>
+              <rect x="520" y="16" width="140" height="32" rx="10" fill="#161f33" stroke="#fbbf24" stroke-width="2"/>
+              <text x="590" y="39" text-anchor="middle" fill="#fbbf24" class="t-caption">distrusts</text>
+              <text x="590" y="8" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">RELATES_TO</text>
+
+              <!-- Harry Node -->
+              <g transform="translate(130, 80)">
+                <circle cx="0" cy="0" r="48" fill="#161f33" stroke="#ef4444" stroke-width="4"/>
+                <circle cx="0" cy="0" r="44" fill="none" stroke="#fbbf24" stroke-width="2"/>
+                <image href="assets/characters/harry.webp" x="-42" y="-48" width="84" height="200" preserveAspectRatio="xMidYMin slice" clip-path="url(#clip-circle-50)"/>
+                <text x="0" y="68" text-anchor="middle" fill="#f8fafc" class="t-body">Harry</text>
+                <text x="0" y="-58" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Character</text>
+              </g>
+
+              <!-- Snape Node -->
+              <g transform="translate(1040, 80)">
+                <circle cx="0" cy="0" r="48" fill="#161f33" stroke="#10b981" stroke-width="4"/>
+                <circle cx="0" cy="0" r="44" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+                <image href="assets/characters/snape.webp" x="-42" y="-48" width="84" height="200" preserveAspectRatio="xMidYMin slice" clip-path="url(#clip-circle-50)"/>
+                <text x="0" y="68" text-anchor="middle" fill="#f8fafc" class="t-body">Snape</text>
+                <text x="0" y="-58" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Character</text>
+              </g>
+            </g>
+
+            <!-- STEP 2: Event (The Quidditch match), Location (Quidditch pitch) -->
+            <g class="build-step" data-step="2">
+              <!-- Harry -> Event (EXPERIENCED) -->
+              <line x1="178" y1="105" x2="310" y2="235" stroke="#fbbf24" stroke-width="3.5" marker-end="url(#arr-gold)"/>
+              <rect x="150" y="155" width="190" height="32" rx="10" fill="#161f33" stroke="#fbbf24" stroke-width="2"/>
+              <text x="245" y="178" text-anchor="middle" fill="#fbbf24" class="t-caption">on the bucking broom</text>
+              <text x="245" y="146" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">EXPERIENCED</text>
+
+              <!-- Snape -> Event (PARTICIPATED_IN) -->
+              <line x1="992" y1="105" x2="730" y2="235" stroke="#94a3b8" stroke-width="3.5" marker-end="url(#arr-slate)"/>
+              <rect x="765" y="155" width="200" height="32" rx="10" fill="#161f33" stroke="#475569" stroke-width="2"/>
+              <text x="865" y="178" text-anchor="middle" fill="#cbd5e1" class="t-caption">muttering, eyes on Harry</text>
+              <text x="865" y="146" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">PARTICIPATED_IN</text>
+
+              <!-- Event Node with Quest Marker icon -->
+              <g transform="translate(510, 260)">
+                <rect x="-180" y="-36" width="360" height="72" rx="18" fill="#161f33" stroke="#fbbf24" stroke-width="3.5"/>
+                <!-- Quest marker icon -->
+                <g transform="translate(-150, -12)">
+                  <polygon points="12,2 22,7 22,19 12,25 2,19 2,7" fill="#fbbf24"/>
+                  <polygon points="12,6 18,10 18,17 12,21 6,17 6,10" fill="#161f33"/>
+                  <circle cx="12" cy="13.5" r="3" fill="#fbbf24"/>
+                </g>
+                <text x="-110" y="8" text-anchor="start" fill="#f8fafc" class="t-caption">The Quidditch match</text>
+                <text x="0" y="-44" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Event</text>
+              </g>
+
+              <!-- Event -> Location (OCCURRED_AT) -->
+              <line x1="510" y1="296" x2="510" y2="349" stroke="#94a3b8" stroke-width="3.5" marker-end="url(#arr-slate)"/>
+              <rect x="450" y="309" width="120" height="30" rx="8" fill="#161f33" stroke="#475569" stroke-width="2"/>
+              <text x="510" y="331" text-anchor="middle" fill="#cbd5e1" class="t-caption">happened at</text>
+              <text x="620" y="331" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">OCCURRED_AT</text>
+
+              <!-- Location Node with Pin icon -->
+              <g transform="translate(510, 385)">
+                <rect x="-160" y="-36" width="320" height="72" rx="16" fill="#161f33" stroke="#fbbf24" stroke-width="3.5"/>
+                <!-- Pin icon -->
+                <path d="M-130 -8 C-135 -8 -139 -4 -139 2 C-139 9 -130 15 -130 15 C-130 15 -121 9 -121 2 C-121 -4 -125 -8 -130 -8 Z" fill="#fbbf24"/>
+                <text x="-95" y="8" text-anchor="start" fill="#f8fafc" class="t-caption">Quidditch pitch</text>
+                <text x="0" y="52" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Location</text>
+              </g>
+            </g>
+
+            <!-- STEP 3: Cracked gem "Snape jinxed the broom", HAS_CLAIM "looked like" -->
+            <g class="build-step" data-step="3">
+              <line x1="690" y1="260" x2="815" y2="260" stroke="#fb7185" stroke-width="3.5" marker-end="url(#arr-rose)"/>
+              <rect x="705" y="244" width="90" height="32" rx="8" fill="#161f33" stroke="#fb7185" stroke-width="2"/>
+              <text x="750" y="266" text-anchor="middle" fill="#fda4af" class="t-caption">looked like</text>
+              <text x="750" y="235" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">HAS_CLAIM</text>
+
+              <!-- Cracked Gem Node -->
+              <g transform="translate(1000, 260)">
+                <rect x="-175" y="-36" width="350" height="72" rx="18" fill="#2a121f" stroke="#fb7185" stroke-width="3.5"/>
+                <!-- Cracked gem icon -->
+                <g transform="translate(-142, 0)">
+                  <polygon points="0,-13 13,0 0,13 -13,0" fill="none" stroke="#fda4af" stroke-width="2.5"/>
+                  <line x1="-9" y1="8" x2="9" y2="-8" stroke="#fda4af" stroke-width="2.5"/>
+                </g>
+                <text x="-112" y="8" text-anchor="start" fill="#fda4af" class="t-caption strike-claim">Snape jinxed the broom</text>
+                <text x="110" y="-44" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Claim</text>
+              </g>
+            </g>
+
+            <!-- STEP 4: Quirrell, Utterance, SAID, ASSERTS, True Claim -->
+            <g class="build-step" data-step="4">
+              <!-- Quirrell Node (Character C) -->
+              <g transform="translate(1500, 80)">
+                <circle cx="0" cy="0" r="48" fill="#161f33" stroke="#a855f7" stroke-width="4"/>
+                <circle cx="0" cy="0" r="44" fill="none" stroke="#fbbf24" stroke-width="2"/>
+                <image href="assets/characters/quirrell.webp" x="-42" y="-48" width="84" height="200" preserveAspectRatio="xMidYMin slice" clip-path="url(#clip-circle-50)"/>
+                <text x="0" y="68" text-anchor="middle" fill="#f8fafc" class="t-body">Quirrell</text>
+                <text x="0" y="-58" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Character</text>
+              </g>
+
+              <!-- Quirrell -> Utterance (SAID) -->
+              <line x1="1490" y1="128" x2="1465" y2="224" stroke="#94a3b8" stroke-width="3.5" marker-end="url(#arr-slate)"/>
+              <rect x="1440" y="162" width="70" height="28" rx="8" fill="#161f33" stroke="#475569" stroke-width="2"/>
+              <text x="1475" y="182" text-anchor="middle" fill="#cbd5e1" class="t-caption">said</text>
+              <text x="1535" y="182" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">SAID</text>
+
+              <!-- Utterance Node with Speech Bubble icon -->
+              <g transform="translate(1450, 260)">
+                <rect x="-235" y="-36" width="470" height="72" rx="18" fill="#161f33" stroke="#cbd5e1" stroke-width="3.5"/>
+                <!-- Bubble icon -->
+                <path d="M-202 -10 L-182 -10 C-178 -10 -175 -7 -175 -3 L-175 4 C-175 8 -178 11 -182 11 L-190 11 L-196 17 L-194 11 L-202 11 C-206 11 -209 8 -209 4 L-209 -3 C-209 -7 -206 -10 -202 -10 Z" fill="#fbbf24"/>
+                <text x="-155" y="8" text-anchor="start" fill="#f8fafc" class="t-caption">Snape was saying a counter-curse</text>
+                <text x="0" y="-44" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Utterance</text>
+              </g>
+
+              <!-- Utterance -> True Claim (ASSERTS) -->
+              <line x1="1450" y1="296" x2="1450" y2="434" stroke="#34d399" stroke-width="3.5" marker-end="url(#arr-green)"/>
+              <rect x="1410" y="348" width="80" height="30" rx="8" fill="#161f33" stroke="#34d399" stroke-width="2"/>
+              <text x="1450" y="370" text-anchor="middle" fill="#6ee7b7" class="t-caption">means</text>
+              <text x="1525" y="370" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">ASSERTS</text>
+
+              <!-- True Claim Solid Gem Node -->
+              <g transform="translate(1450, 470)">
+                <rect x="-215" y="-36" width="430" height="72" rx="18" fill="#063e31" stroke="#34d399" stroke-width="4"/>
+                <!-- Solid gem icon -->
+                <polygon points="-180,0 -168,-12 -156,0 -168,12" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/>
+                <text x="-135" y="8" text-anchor="start" fill="#6ee7b7" class="t-caption">Snape was protecting Harry</text>
+                <text x="120" y="52" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">Claim</text>
+              </g>
+            </g>
+
+            <!-- STEP 5: Learning moment (KnowledgeAcquisition) with Key icon -->
+            <g class="build-step" data-step="5">
+              <!-- Harry -> Key (ACQUIRED) -->
+              <line x1="130" y1="148" x2="130" y2="434" stroke="#fbbf24" stroke-width="3.5" marker-end="url(#arr-gold)"/>
+              <rect x="85" y="280" width="90" height="30" rx="8" fill="#161f33" stroke="#fbbf24" stroke-width="2"/>
+              <text x="130" y="302" text-anchor="middle" fill="#fbbf24" class="t-caption">learned</text>
+              <text x="130" y="270" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">ACQUIRED</text>
+
+              <!-- Learning Moment Node with Key icon -->
+              <g transform="translate(230, 470)">
+                <rect x="-215" y="-36" width="440" height="72" rx="18" fill="#2e2107" stroke="#fbbf24" stroke-width="4"/>
+                <!-- Key icon -->
+                <g transform="translate(-175, 0)">
+                  <circle cx="0" cy="0" r="7" fill="none" stroke="#fbbf24" stroke-width="2.5"/>
+                  <line x1="7" y1="0" x2="20" y2="0" stroke="#fbbf24" stroke-width="2.5"/>
+                  <line x1="15" y1="0" x2="15" y2="5" stroke="#fbbf24" stroke-width="2.5"/>
+                  <line x1="19" y1="0" x2="19" y2="5" stroke="#fbbf24" stroke-width="2.5"/>
+                </g>
+                <text x="-130" y="8" text-anchor="start" fill="#fbbf24" class="t-caption">Quirrell's words · the last room</text>
+                <text x="0" y="52" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">KnowledgeAcquisition</text>
+              </g>
+
+              <!-- Key -> True Gem (ABOUT) -->
+              <path d="M 455 470 C 680 540, 990 540, 1235 470" fill="none" stroke="#fbbf24" stroke-width="3.5" marker-end="url(#arr-gold)"/>
+              <rect x="805" y="522" width="90" height="30" rx="8" fill="#161f33" stroke="#fbbf24" stroke-width="2"/>
+              <text x="850" y="544" text-anchor="middle" fill="#fbbf24" class="t-caption">about</text>
+              <text x="925" y="544" text-anchor="middle" fill="#6ee7b7" class="t-caption mono db-only">ABOUT</text>
+            </g>
+          </svg>
+
+          <!-- Banner on step 5 -->
+          <div class="map-rule-bar build-step" data-step="5">
+            <span class="t-body" style="color: var(--accent);">Seeing is not knowing.</span>
+            <span class="t-caption">Witnessing an event does not unlock every truth inside it.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 3: SPRINT 2 (TRAPDOOR 6 ROOMS) ==================== -->
+    <section class="screen" data-screen="3" data-time="70"
+      data-notes="We started with characters and saved them into a graph database. The challenge was learning three new tools at once: the database, a step-by-step pipeline and error tracing. We overcame it by building small graphs one step at a time and tracing every call to see where it failed. Demo: switch narrators. Ron saw 4 rooms, Hermione 5, Harry 6, Snape none. Then show Harry's last room. Controls: right arrow for the build step, keys 1 to 4 to switch.">
+      
+      <h1 class="screen-title t-title">Sprint 2</h1>
+      <div class="prompt-banner">
+        <span class="prompt-label t-caption mono">PROMPT:</span>
+        <span class="t-caption">What was a challenge you faced, or a barrier/dependency? How did you overcome it?</span>
+      </div>
+      <p class="answer-line t-body" style="top: 210px;">New tools to learn: small steps, each one traced.</p>
+      <p class="tools-caption t-caption mono" style="position: absolute; left: 96px; top: 254px; color: var(--text-muted); margin: 0;">graph database · step-by-step pipeline · error tracing (Neo4j · LangGraph · LangSmith)</p>
+
+      <div class="content-box" style="top: 300px;">
+        <div class="trapdoor-container">
+          <div class="rooms-track">
+            <!-- Room 1: Fluffy -->
+            <div id="room-card-1" class="room-card lit">
+              <div class="room-card-header">
+                <span class="t-caption mono">ROOM 1</span>
+                <div class="room-icon-box">
+                  <!-- Custom SVG: Three dog heads -->
+                  <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                    <circle cx="8" cy="12" r="5" fill="#fbbf24"/>
+                    <circle cx="16" cy="10" r="6" fill="#fbbf24"/>
+                    <circle cx="24" cy="12" r="5" fill="#fbbf24"/>
+                    <polygon points="14,14 18,14 16,18" fill="#1e293b"/>
+                  </svg>
+                  <!-- Place pin -->
+                  <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+                    <path d="M10 2 C6 2 3 5 3 9 C3 14 10 22 10 22 C10 22 17 14 17 9 C17 5 14 2 10 2 Z" fill="#94a3b8"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="room-title t-body">Fluffy</div>
+              <div class="room-occupants" id="room-1-occupants">
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></div>
+              </div>
+              <div class="room-status-badge t-caption mono" id="room-1-status">Music sleeps the beast</div>
+            </div>
+
+            <!-- Room 2: Devil's Snare -->
+            <div id="room-card-2" class="room-card lit">
+              <div class="room-card-header">
+                <span class="t-caption mono">ROOM 2</span>
+                <div class="room-icon-box">
+                  <!-- Custom SVG: Twisting vines -->
+                  <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                    <path d="M6 26 Q12 18 10 12 Q8 6 16 6 Q24 6 22 14 Q20 22 26 26" fill="none" stroke="#fbbf24" stroke-width="3"/>
+                    <circle cx="10" cy="12" r="3" fill="#34d399"/>
+                    <circle cx="22" cy="14" r="3" fill="#34d399"/>
+                  </svg>
+                  <!-- Place pin -->
+                  <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+                    <path d="M10 2 C6 2 3 5 3 9 C3 14 10 22 10 22 C10 22 17 14 17 9 C17 5 14 2 10 2 Z" fill="#94a3b8"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="room-title t-body">Devil's Snare</div>
+              <div class="room-occupants" id="room-2-occupants">
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></div>
+              </div>
+              <div class="room-status-badge t-caption mono" id="room-2-status">Bluebell flames</div>
+            </div>
+
+            <!-- Room 3: Flying keys -->
+            <div id="room-card-3" class="room-card lit">
+              <div class="room-card-header">
+                <span class="t-caption mono">ROOM 3</span>
+                <div class="room-icon-box">
+                  <!-- Custom SVG: Pair of wings (NO key icon!) -->
+                  <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                    <path d="M4 18 C8 12 14 10 16 16 C18 10 24 12 28 18 C22 18 18 22 16 26 C14 22 10 18 4 18 Z" fill="none" stroke="#fbbf24" stroke-width="2.5"/>
+                  </svg>
+                  <!-- Place pin -->
+                  <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+                    <path d="M10 2 C6 2 3 5 3 9 C3 14 10 22 10 22 C10 22 17 14 17 9 C17 5 14 2 10 2 Z" fill="#94a3b8"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="room-title t-body">Flying keys</div>
+              <div class="room-occupants" id="room-3-occupants">
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></div>
+              </div>
+              <div class="room-status-badge t-caption mono" id="room-3-status">Crumpled wing key</div>
+            </div>
+
+            <!-- Room 4: Giant chess -->
+            <div id="room-card-4" class="room-card lit">
+              <div class="room-card-header">
+                <span class="t-caption mono">ROOM 4</span>
+                <div class="room-icon-box">
+                  <!-- Custom SVG: Chess knight -->
+                  <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                    <path d="M10 26 L22 26 L20 22 C20 18 24 14 22 8 C18 8 16 10 14 12 C12 12 10 14 10 18 Z" fill="#fbbf24"/>
+                  </svg>
+                  <!-- Place pin -->
+                  <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+                    <path d="M10 2 C6 2 3 5 3 9 C3 14 10 22 10 22 C10 22 17 14 17 9 C17 5 14 2 10 2 Z" fill="#94a3b8"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="room-title t-body">Giant chess</div>
+              <div class="room-occupants" id="room-4-occupants">
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></div>
+              </div>
+              <div class="room-status-badge t-caption mono" id="room-4-status">Sacrifice play</div>
+              <div id="ron-stop-marker" class="stop-marker-banner t-caption mono" style="display: none;">Stays at the chessboard</div>
+            </div>
+
+            <!-- Room 5: Potion riddle -->
+            <div id="room-card-5" class="room-card lit">
+              <div class="room-card-header">
+                <span class="t-caption mono">ROOM 5</span>
+                <div class="room-icon-box">
+                  <!-- Custom SVG: Row of bottles -->
+                  <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                    <rect x="6" y="14" width="5" height="12" rx="1" fill="#fbbf24"/>
+                    <rect x="13" y="10" width="6" height="16" rx="1.5" fill="#fbbf24"/>
+                    <rect x="21" y="16" width="5" height="10" rx="1" fill="#fbbf24"/>
+                  </svg>
+                  <!-- Place pin -->
+                  <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+                    <path d="M10 2 C6 2 3 5 3 9 C3 14 10 22 10 22 C10 22 17 14 17 9 C17 5 14 2 10 2 Z" fill="#94a3b8"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="room-title t-body">Potion riddle</div>
+              <div class="room-occupants" id="room-5-occupants">
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+                <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+              </div>
+              <div class="room-status-badge t-caption mono" id="room-5-status">Seven bottles</div>
+              <div id="hermione-stop-marker" class="stop-marker-banner t-caption mono" style="display: none;">Goes back</div>
+            </div>
+
+            <!-- Room 6: Mirror room -->
+            <div id="room-card-6" class="room-card lit">
+              <div class="room-card-header">
+                <span class="t-caption mono">ROOM 6</span>
+                <div class="room-icon-box">
+                  <!-- Custom SVG: Standing mirror -->
+                  <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                    <ellipse cx="16" cy="14" rx="9" ry="11" fill="none" stroke="#fbbf24" stroke-width="2.5"/>
+                    <line x1="16" y1="25" x2="16" y2="29" stroke="#fbbf24" stroke-width="2.5"/>
+                    <line x1="10" y1="29" x2="22" y2="29" stroke="#fbbf24" stroke-width="2.5"/>
+                  </svg>
+                  <!-- Place pin -->
+                  <svg width="20" height="24" viewBox="0 0 20 24" aria-hidden="true">
+                    <path d="M10 2 C6 2 3 5 3 9 C3 14 10 22 10 22 C10 22 17 14 17 9 C17 5 14 2 10 2 Z" fill="#94a3b8"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="room-title t-body">Mirror room</div>
+              <div class="room-occupants" id="room-6-occupants"></div>
+              <div class="room-status-badge t-caption mono" id="room-6-status">Snape?</div>
+            </div>
+          </div>
+
+          <!-- Bottom perception counter bar -->
+          <div class="sprint1-summary-bar">
+            <span id="sprint1-counter" class="t-body" style="color: var(--accent);">Saw 6 of 6</span>
+            <span id="sprint1-detail" class="t-caption mono">Through the trapdoor · Chapter 16–17</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 4: SPRINT 3 (KNOWLEDGE INVENTORY) ==================== -->
+    <section class="screen" data-screen="4" data-time="55"
+      data-notes="While testing extraction, we found that a character's true identity is often revealed only at the end, as here: everyone suspects Snape, and it was Quirrell, and Voldemort was hiding in him. Extracting chapter by chapter locks in wrong guesses. So the model now reads the book once first (chapter summaries and a running 'who is who'), and extraction comes after. The model reads and the code remembers: the code gives the IDs and checks every answer. Show 'Going down', then 'Hospital wing'.">
+      
+      <h1 class="screen-title t-title">Sprint 3</h1>
+      <div class="prompt-banner">
+        <span class="prompt-label t-caption mono">PROMPT:</span>
+        <span class="t-caption">What's a diversion you took, or something surprising that happened during the process?</span>
+      </div>
+      <p class="answer-line t-body">Who someone is can change at the end, so read first.</p>
+
+      <div class="content-box">
+        <div class="sprint2-container">
+          <!-- Two-step strip -->
+          <div class="two-step-strip t-caption mono" style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px;">
+            <span style="background: rgba(30, 41, 59, 0.95); border: 2px solid var(--accent); padding: 6px 20px; border-radius: 9999px; color: var(--accent);">1 Read the whole book</span>
+            <span class="step-arrow" style="color: var(--text-muted); font-size: 24px;">→</span>
+            <span style="background: rgba(30, 41, 59, 0.95); border: 2px solid var(--accent); padding: 6px 20px; border-radius: 9999px; color: var(--accent);">2 Then extract</span>
+          </div>
+
+          <div class="time-tabs-row">
+            <div class="time-tabs">
+              <button type="button" id="tab-going-down" class="time-tab t-caption mono active" data-inventory-tab="0">Going down</button>
+              <button type="button" id="tab-hospital-wing" class="time-tab t-caption mono" data-inventory-tab="1">Hospital wing</button>
+            </div>
+            <div id="toast-achievement" class="toast-banner t-caption mono" style="opacity: 0;">
+              <span>★</span>
+              <span>Achievement unlocked: the last room</span>
+            </div>
+          </div>
+
+          <div class="inventory-grid" id="inventory-grid">
+            <!-- Slot 1: Belief or Key -->
+            <div id="inv-slot-1" class="inv-slot slot-false">
+              <div class="inv-slot-top">
+                <span class="t-caption mono" style="color: var(--false-text);">BELIEF</span>
+                <!-- SVG: Cracked gem -->
+                <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                  <polygon points="16,4 28,16 16,28 4,16" fill="none" stroke="#fb7185" stroke-width="2.5"/>
+                  <line x1="16" y1="4" x2="16" y2="28" stroke="#fb7185" stroke-width="2"/>
+                </svg>
+              </div>
+              <div id="inv-slot-1-text" class="t-body strike-claim">Snape wants the Stone</div>
+              <div id="inv-slot-1-sub" class="t-caption mono" style="color: var(--text-dim);">Unverified suspicion</div>
+            </div>
+
+            <!-- Slot 2: Acquisition / Fact -->
+            <div id="inv-slot-2" class="inv-slot slot-unknown">
+              <div class="inv-slot-top">
+                <span class="t-caption mono" style="color: var(--text-dim);">STATUS</span>
+                <span class="t-caption mono">...</span>
+              </div>
+              <div id="inv-slot-2-text" class="t-body" style="color: var(--text-dim);">Locked</div>
+              <div id="inv-slot-2-sub" class="t-caption mono" style="color: var(--text-dim);">Awaits encounter</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== SLIDE 5: WHAT'S NEXT FOR ME ==================== -->
+    <section class="screen" data-screen="5" data-time="45"
+      data-notes="Looking forward, my next steps are running whole-book extractions with production LLMs, persisting the complete scene graphs directly to Neo4j, and synthesizing rich multi-character POV retellings. The fundamental takeaway from this work is simple yet profound: model what people know, not just where they were. If you'd like to test the trapdoor journey through someone else's eyes, choose a character below to replay the first sprint. Click a character or press keys 1 to 4 to jump to Sprint 1.">
+      
+      <h1 class="screen-title t-title">What's Next for Me</h1>
+
+      <div class="content-box">
+        <div class="sprint-next-container">
+          <!-- Lesson line callback -->
+          <div class="lesson-banner">
+            <span class="t-body" style="color: var(--accent);">Model what people know, not just where they were.</span>
+          </div>
+
+          <!-- Level progress -->
+          <div class="levels-track">
+            <div class="level-card cleared">
+              <div>
+                <div class="t-caption mono" style="color: var(--known-text); margin-bottom: 8px;">LEVEL 1</div>
+                <div class="t-body">Read</div>
+                <div class="status-pill t-caption mono" style="margin-top: 10px;">Cleared</div>
+              </div>
+              <div>
+                <div class="level-bar-bg" style="margin-bottom: 12px;">
+                  <div class="level-bar-fill" style="width: 100%; background: var(--known);"></div>
+                </div>
+                <div class="t-caption mono">chapters &amp; paragraphs</div>
+              </div>
+            </div>
+
+            <div class="level-card cleared">
+              <div>
+                <div class="t-caption mono" style="color: var(--known-text); margin-bottom: 8px;">LEVEL 2</div>
+                <div class="t-body">Remember</div>
+                <div class="status-pill t-caption mono" style="margin-top: 10px;">Cleared</div>
+              </div>
+              <div>
+                <div class="level-bar-bg" style="margin-bottom: 12px;">
+                  <div class="level-bar-fill" style="width: 100%; background: var(--known);"></div>
+                </div>
+                <div class="t-caption mono">summaries &amp; who is who</div>
+              </div>
+            </div>
+
+            <div class="level-card in-progress">
+              <div>
+                <div class="t-caption mono" style="color: var(--accent); margin-bottom: 8px;">LEVEL 3</div>
+                <div class="t-body">Structure</div>
+                <div class="status-pill t-caption mono" style="margin-top: 10px;">In progress</div>
+              </div>
+              <div>
+                <div class="level-bar-bg" style="margin-bottom: 12px;">
+                  <div class="level-bar-fill" style="width: 50%; background: var(--accent);"></div>
+                </div>
+                <div class="t-caption mono">who, where, when</div>
+              </div>
+            </div>
+
+            <div class="level-card locked">
+              <div>
+                <div class="t-caption mono" style="color: var(--text-dim); margin-bottom: 8px;">LEVEL 4</div>
+                <div class="t-body">Retell</div>
+                <div class="status-pill t-caption mono" style="margin-top: 10px;">Locked</div>
+              </div>
+              <div>
+                <div class="level-bar-bg" style="margin-bottom: 12px;">
+                  <div class="level-bar-fill" style="width: 0%; background: var(--text-dim);"></div>
+                </div>
+                <div class="t-caption mono">the story from any eyes</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Next quest chips -->
+          <div class="quest-row">
+            <div class="quest-chip t-caption mono">
+              <span style="color: var(--accent);">QUEST 1</span>
+              <span>Test on whole books</span>
+            </div>
+            <div class="quest-chip t-caption mono">
+              <span style="color: var(--accent);">QUEST 2</span>
+              <span>Save to the graph</span>
+            </div>
+            <div class="quest-chip t-caption mono">
+              <span style="color: var(--accent);">QUEST 3</span>
+              <span>Retell from any eyes</span>
+            </div>
+          </div>
+
+          <!-- Replay character select -->
+          <div class="replay-roster-section">
+            <span class="t-body">Who saw the last room?</span>
+            <div class="replay-mini-grid">
+              <button type="button" class="replay-character-btn t-caption mono" data-replay-narrator="harry">
+                <span class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></span>
+                <span>Harry</span>
+              </button>
+              <button type="button" class="replay-character-btn t-caption mono" data-replay-narrator="hermione">
+                <span class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></span>
+                <span>Hermione</span>
+              </button>
+              <button type="button" class="replay-character-btn t-caption mono" data-replay-narrator="ron">
+                <span class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></span>
+                <span>Ron</span>
+              </button>
+              <button type="button" class="replay-character-btn t-caption mono" data-replay-narrator="quirrell">
+                <span class="portrait-circle xs house-neutral"><img src="assets/characters/quirrell.webp" alt="Quirrell"></span>
+                <span>Quirrell</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom HUD Footer -->
+    <footer id="hud-footer">
+      <div class="hud-left">
+        <div class="hud-xp-wrap">
+          <span class="t-caption mono" style="color: var(--accent);">XP</span>
+          <div class="hud-xp-bar">
+            <div id="hud-xp-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div class="t-caption mono" id="hud-counter">1 / 5</div>
+    </footer>
+  </main>
+</div>
+
+<!-- Local GSAP 3.12.5 -->
+<script src="assets/vendor/gsap.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  // Application State
+  const state = {
+    screen: 1,
+    step: 0,
+    narrator: "harry", // "harry" | "hermione" | "ron" | "snape"
+    showDbTerms: false,
+    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  };
+
+  const NARRATORS = {
+    harry: { name: "Harry Potter", house: "house-gryffindor", file: "harry.webp" },
+    hermione: { name: "Hermione Granger", house: "house-gryffindor", file: "hermione.webp" },
+    ron: { name: "Ron Weasley", house: "house-gryffindor", file: "ron.webp" },
+    quirrell: { name: "Professor Quirrell", house: "house-neutral", file: "quirrell.webp" },
+    snape: { name: "Severus Snape", house: "house-slytherin", file: "snape.webp" }
+  };
+
+  const SCREEN_STEPS = {
+    1: 1, // 0: State A (Intro), 1: State B (Character Select)
+    2: 5, // Graph build steps 1 to 5 (World Map)
+    3: 1, // 0: Rooms overview, 1: Last-room highlight (Trapdoor rooms)
+    4: 1, // 0: Tab Going down, 1: Tab Hospital wing (Inventory)
+    5: 0  // Single step
+  };
+
+  // Starry sky background canvas drawing
+  function initStarrySky() {
+    const canvas = document.getElementById("starry-sky");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const stars = [];
+    for (let i = 0; i < 90; i++) {
+      stars.push({
+        x: Math.random() * 1920,
+        y: Math.random() * 1080,
+        r: Math.random() * 1.8 + 0.6,
+        alpha: Math.random() * 0.7 + 0.3,
+        delta: (Math.random() * 0.02 + 0.005) * (Math.random() < 0.5 ? 1 : -1)
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, 1920, 1080);
+      for (const s of stars) {
+        s.alpha += s.delta;
+        if (s.alpha > 0.95 || s.alpha < 0.25) s.delta = -s.delta;
+        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (!state.reducedMotion) {
+        requestAnimationFrame(draw);
+      }
+    }
+    draw();
+  }
+
+  // Update HUD elements
+  function updateHud() {
+    const hudNarrator = document.getElementById("hud-narrator");
+    const switcherBar = document.getElementById("narrator-switcher-bar");
+    const hudCounter = document.getElementById("hud-counter");
+    const hudXpFill = document.getElementById("hud-xp-fill");
+
+    if (hudCounter) {
+      hudCounter.textContent = `${state.screen} / 5`;
+    }
+    if (hudXpFill) {
+      hudXpFill.style.width = `${(state.screen / 5) * 100}%`;
+    }
+
+    // HUD Narrator indicator is shown on slides 2 to 5
+    if (hudNarrator) {
+      if (state.screen === 1) {
+        hudNarrator.style.display = "none";
+      } else {
+        hudNarrator.style.display = "flex";
+        const nar = NARRATORS[state.narrator];
+        const portraitImg = document.getElementById("hud-portrait-img");
+        const portraitBox = document.getElementById("hud-portrait");
+        const hudName = document.getElementById("hud-name");
+
+        if (portraitImg) portraitImg.src = `assets/characters/${nar.file}`;
+        if (portraitBox) {
+          portraitBox.className = `portrait-circle xs ${nar.house}`;
+        }
+        if (hudName) hudName.textContent = nar.name;
+      }
+    }
+
+    // Switcher bar shown on slides 3 and 4
+    if (switcherBar) {
+      if (state.screen === 3 || state.screen === 4) {
+        switcherBar.style.display = "flex";
+        switcherBar.querySelectorAll(".narrator-nav-btn").forEach(btn => {
+          btn.classList.toggle("active", btn.dataset.navNarrator === state.narrator);
+          const iconCircle = btn.querySelector(".portrait-circle");
+          if (iconCircle) {
+            iconCircle.style.display = "block";
+          }
+        });
+      } else {
+        switcherBar.style.display = "none";
+      }
+    }
+  }
+
+  // Render Slide 2 (Sprint 1: Knowledge Graph / World Map)
+  function renderSlide2() {
+    const activeScreenEl = document.querySelector('.screen[data-screen="2"]');
+    if (!activeScreenEl) return;
+
+    const buildSteps = activeScreenEl.querySelectorAll(".build-step");
+    buildSteps.forEach(el => {
+      const stepNum = parseInt(el.dataset.step || "1", 10);
+      if (state.reducedMotion) {
+        el.classList.add("visible");
+      } else {
+        el.classList.toggle("visible", stepNum <= state.step);
+      }
+    });
+  }
+
+  // Render Slide 3 (Sprint 2: Trapdoor 6 rooms) according to active narrator and step
+  function renderSlide3() {
+    const nar = state.narrator;
+    const isStep1 = state.step >= 1;
+
+    const r1 = document.getElementById("room-card-1");
+    const r2 = document.getElementById("room-card-2");
+    const r3 = document.getElementById("room-card-3");
+    const r4 = document.getElementById("room-card-4");
+    const r5 = document.getElementById("room-card-5");
+    const r6 = document.getElementById("room-card-6");
+
+    const r1Occ = document.getElementById("room-1-occupants");
+    const r2Occ = document.getElementById("room-2-occupants");
+    const r3Occ = document.getElementById("room-3-occupants");
+    const r4Occ = document.getElementById("room-4-occupants");
+    const r5Occ = document.getElementById("room-5-occupants");
+    const r6Occ = document.getElementById("room-6-occupants");
+
+    const ronStop = document.getElementById("ron-stop-marker");
+    const hermioneStop = document.getElementById("hermione-stop-marker");
+    const r6Flip = document.getElementById("room-6-flip");
+
+    const r1Status = document.getElementById("room-1-status");
+    const r2Status = document.getElementById("room-2-status");
+    const r3Status = document.getElementById("room-3-status");
+    const r4Status = document.getElementById("room-4-status");
+    const r5Status = document.getElementById("room-5-status");
+    const r6Status = document.getElementById("room-6-status");
+
+    const counter = document.getElementById("sprint1-counter");
+    const detail = document.getElementById("sprint1-detail");
+
+    // Reset stop markers
+    if (ronStop) ronStop.style.display = "none";
+    if (hermioneStop) hermioneStop.style.display = "none";
+    if (r6Flip) r6Flip.classList.remove("flipped");
+
+    const trioHtml = `
+      <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+      <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+      <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/ron.webp" alt="Ron"></div>
+    `;
+    const duoHtml = `
+      <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+      <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/hermione.webp" alt="Hermione"></div>
+    `;
+
+    if (nar === "harry") {
+      [r1, r2, r3, r4, r5, r6].forEach(r => {
+        r.className = "room-card lit";
+      });
+      r1Occ.innerHTML = trioHtml;
+      r2Occ.innerHTML = trioHtml;
+      r3Occ.innerHTML = trioHtml;
+      r4Occ.innerHTML = trioHtml;
+      r5Occ.innerHTML = duoHtml;
+      r6Occ.style.display = "flex";
+      r6Occ.innerHTML = `
+        <div class="flip-box ${isStep1 ? "flipped" : ""}" id="room-6-flip">
+          <div class="flip-inner">
+            <div class="flip-front">
+              <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+              <div class="portrait-circle xs" style="border: 2px dashed #fb7185; display: flex; align-items: center; justify-content: center; background: #2a121f;">
+                <span class="t-caption mono" style="color: #fda4af;">?</span>
+              </div>
+            </div>
+            <div class="flip-back">
+              <div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>
+              <div class="portrait-circle xs" style="border: 2px solid var(--accent);"><img src="assets/characters/quirrell.webp" alt="Quirrell"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (r1Status) r1Status.textContent = "Music sleeps the beast";
+      if (r2Status) r2Status.textContent = "Bluebell flames";
+      if (r3Status) r3Status.textContent = "Crumpled wing key";
+      if (r4Status) r4Status.textContent = "Giant chess";
+      if (r5Status) r5Status.textContent = "Seven bottles";
+      if (r6Status) r6Status.textContent = isStep1 ? "Quirrell, not Snape" : "Snape?";
+
+      if (counter) counter.textContent = "Saw 6 of 6";
+      if (detail) detail.textContent = isStep1 ? "All six rooms lit · Found Quirrell at the Mirror" : "All six rooms lit · Reaching the final room";
+
+    } else if (nar === "hermione") {
+      [r1, r2, r3, r4, r5].forEach(r => r.className = "room-card lit");
+      r6.className = "room-card fogged";
+
+      r1Occ.innerHTML = trioHtml;
+      r2Occ.innerHTML = trioHtml;
+      r3Occ.innerHTML = trioHtml;
+      r4Occ.innerHTML = trioHtml;
+      r5Occ.innerHTML = duoHtml;
+      r6Occ.innerHTML = "";
+      r6Occ.style.display = "none";
+
+      if (r1Status) r1Status.textContent = "Music sleeps the beast";
+      if (r2Status) r2Status.textContent = "Bluebell flames";
+      if (r3Status) r3Status.textContent = "Crumpled wing key";
+      if (r4Status) r4Status.textContent = "Giant chess";
+      if (r5Status) r5Status.textContent = isStep1 ? "Solves the riddle" : "Seven bottles";
+      if (r6Status) r6Status.textContent = "In fog";
+
+      if (hermioneStop) hermioneStop.style.display = "block";
+      if (counter) counter.textContent = "Saw 5 of 6";
+      if (detail) detail.textContent = "Solves the potion logic riddle · Goes back to help Ron";
+
+    } else if (nar === "ron") {
+      [r1, r2, r3, r4].forEach(r => r.className = "room-card lit");
+      [r5, r6].forEach(r => r.className = "room-card fogged");
+
+      r1Occ.innerHTML = trioHtml;
+      r2Occ.innerHTML = trioHtml;
+      r3Occ.innerHTML = trioHtml;
+      r4Occ.innerHTML = trioHtml;
+      r5Occ.innerHTML = "";
+      r6Occ.innerHTML = "";
+      r6Occ.style.display = "none";
+
+      if (r1Status) r1Status.textContent = "Music sleeps the beast";
+      if (r2Status) r2Status.textContent = "Bluebell flames";
+      if (r3Status) r3Status.textContent = "Crumpled wing key";
+      if (r4Status) r4Status.textContent = "Lets himself be taken";
+      if (r5Status) r5Status.textContent = "In fog";
+      if (r6Status) r6Status.textContent = "In fog";
+
+      if (ronStop) ronStop.style.display = "block";
+      if (counter) counter.textContent = "Saw 4 of 6";
+      if (detail) detail.textContent = "Lets himself be taken · Knocked out at chessboard";
+
+    } else if (nar === "quirrell") {
+      [r1, r2, r3, r4, r5, r6].forEach(r => {
+        r.className = "room-card lit";
+      });
+      const qHtml = `<div class="portrait-circle xs house-neutral"><img src="assets/characters/quirrell.webp" alt="Quirrell"></div>`;
+      r1Occ.innerHTML = qHtml;
+      r2Occ.innerHTML = qHtml;
+      r3Occ.innerHTML = qHtml;
+      r4Occ.innerHTML = qHtml;
+      r5Occ.innerHTML = qHtml;
+      r6Occ.style.display = "flex";
+
+      if (r1Status) r1Status.textContent = "before the trio";
+      if (r2Status) r2Status.textContent = "before the trio";
+      if (r3Status) r3Status.textContent = "before the trio";
+      if (r4Status) r4Status.textContent = "before the trio";
+      if (r5Status) r5Status.textContent = "before the trio";
+
+      if (isStep1) {
+        r6Occ.innerHTML = qHtml + `<div class="portrait-circle xs house-gryffindor"><img src="assets/characters/harry.webp" alt="Harry"></div>`;
+        if (r6Status) r6Status.textContent = "Waiting at the Mirror";
+      } else {
+        r6Occ.innerHTML = qHtml;
+        if (r6Status) r6Status.textContent = "Waiting at the Mirror";
+      }
+
+      if (counter) counter.textContent = "Saw 6 of 6";
+      if (detail) detail.textContent = "Went down before the trio · Waiting at the Mirror";
+
+    } else if (nar === "snape") {
+      // Snape perceived 0 rooms. In Snape's view, all 6 rooms show his lack of presence:
+      [r1, r2, r3, r4, r6].forEach(r => {
+        r.className = "room-card fogged";
+      });
+      r5.className = "room-card known-not-seen"; // Dashed outline, known not seen
+
+      r1Occ.innerHTML = "";
+      r2Occ.innerHTML = "";
+      r3Occ.innerHTML = "";
+      r4Occ.innerHTML = "";
+      r5Occ.innerHTML = "";
+      r6Occ.innerHTML = "";
+      r6Occ.style.display = "none";
+
+      if (r1Status) r1Status.textContent = "In fog";
+      if (r2Status) r2Status.textContent = "In fog";
+      if (r3Status) r3Status.textContent = "In fog";
+      if (r4Status) r4Status.textContent = "In fog";
+      if (r5Status) r5Status.textContent = "My riddle · not there";
+      if (r6Status) r6Status.textContent = "In fog";
+
+      if (counter) counter.textContent = "Saw 0 of 6";
+      if (detail) detail.textContent = "Devised potion riddle · Not present down trapdoor";
+    }
+  }
+
+  // Helper for Slide 4 slot headers
+  function setSlotHeader(slotEl, label, color, iconType) {
+    const top = slotEl.querySelector(".inv-slot-top");
+    if (!top) return;
+    let svg = "";
+    if (iconType === "key") {
+      svg = `<svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="10" cy="16" r="6" fill="none" stroke="#fbbf24" stroke-width="2.5"/><line x1="16" y1="16" x2="28" y2="16" stroke="#fbbf24" stroke-width="2.5"/><line x1="22" y1="16" x2="22" y2="21" stroke="#fbbf24" stroke-width="2.5"/><line x1="26" y1="16" x2="26" y2="21" stroke="#fbbf24" stroke-width="2.5"/></svg>`;
+    } else if (iconType === "false") {
+      svg = `<svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="none" stroke="#fb7185" stroke-width="2.5"/><line x1="16" y1="4" x2="16" y2="28" stroke="#fb7185" stroke-width="2"/></svg>`;
+    } else if (iconType === "known") {
+      svg = `<svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/></svg>`;
+    } else if (iconType === "dash") {
+      svg = `<svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><line x1="8" y1="16" x2="24" y2="16" stroke="#64748b" stroke-width="2.5"/></svg>`;
+    } else {
+      svg = `<svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="4,3"/></svg>`;
+    }
+    top.innerHTML = `<span class="t-caption mono" style="color: ${color};">${label}</span>${svg}`;
+  }
+
+  // Render Slide 4 (Sprint 3: Epistemic Inventory) according to tab and narrator
+  function renderSlide4() {
+    const nar = state.narrator;
+    const isHospitalWing = state.step >= 1;
+
+    const tabDown = document.getElementById("tab-going-down");
+    const tabHosp = document.getElementById("tab-hospital-wing");
+    const toast = document.getElementById("toast-achievement");
+
+    const slot1 = document.getElementById("inv-slot-1");
+    const slot1Text = document.getElementById("inv-slot-1-text");
+    const slot1Sub = document.getElementById("inv-slot-1-sub");
+
+    const slot2 = document.getElementById("inv-slot-2");
+    const slot2Text = document.getElementById("inv-slot-2-text");
+    const slot2Sub = document.getElementById("inv-slot-2-sub");
+
+    if (tabDown) tabDown.classList.toggle("active", !isHospitalWing);
+    if (tabHosp) tabHosp.classList.toggle("active", isHospitalWing);
+
+    if (!isHospitalWing) {
+      // Step 0: "Going down"
+      if (toast) toast.style.opacity = "0";
+
+      if (nar === "harry" || nar === "hermione" || nar === "ron") {
+        slot1.className = "inv-slot slot-false";
+        setSlotHeader(slot1, "BELIEF", "var(--false-text)", "false");
+        slot1Text.className = "t-body strike-claim";
+        slot1Text.textContent = "Snape wants the Stone";
+        slot1Sub.textContent = "False belief · no key";
+
+        slot2.className = "inv-slot slot-unknown";
+        setSlotHeader(slot2, "UNKNOWN", "var(--text-dim)", "unknown");
+        slot2Text.className = "t-body";
+        slot2Text.textContent = "Absence · no key";
+        slot2Sub.textContent = "Awaits the last room";
+      } else if (nar === "quirrell") {
+        slot1.className = "inv-slot slot-known";
+        setSlotHeader(slot1, "KNOWN", "var(--known-text)", "known");
+        slot1Text.className = "t-body";
+        slot1Text.textContent = "I am after the Stone";
+        slot1Sub.textContent = "True intention";
+
+        slot2.className = "inv-slot slot-known";
+        setSlotHeader(slot2, "KNOWN", "var(--known-text)", "known");
+        slot2Text.className = "t-body";
+        slot2Text.textContent = "Voldemort hides in me";
+        slot2Sub.textContent = "Secret under the turban";
+      } else {
+        // Snape
+        slot1.className = "inv-slot slot-known";
+        setSlotHeader(slot1, "KNOWN", "var(--known-text)", "known");
+        slot1Text.className = "t-body";
+        slot1Text.textContent = "Suspects Quirrell";
+        slot1Sub.textContent = "Pre-existing knowledge";
+
+        slot2.className = "inv-slot slot-known";
+        setSlotHeader(slot2, "KNOWN", "var(--known-text)", "known");
+        slot2Text.className = "t-body";
+        slot2Text.textContent = "Protecting Harry from Quirrell";
+        slot2Sub.textContent = "Pre-existing knowledge";
+      }
+    } else {
+      // Step 1: "Hospital wing"
+      if (nar === "harry") {
+        if (toast) toast.style.opacity = "1";
+
+        slot1.className = "inv-slot slot-key";
+        setSlotHeader(slot1, "LEARNING MOMENT", "var(--accent)", "key");
+        slot1Text.className = "t-body";
+        slot1Text.textContent = "Heard from Quirrell · the last room";
+        slot1Sub.textContent = "Direct learning moment";
+
+        slot2.className = "inv-slot slot-known";
+        setSlotHeader(slot2, "KNOWN", "var(--known-text)", "known");
+        slot2Text.className = "t-body";
+        slot2Text.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/></svg>
+            <span>It was Quirrell</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/></svg>
+            <span>Voldemort was hiding in Quirrell</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/></svg>
+            <span style="color: var(--known-text);">Snape was protecting me</span>
+          </div>
+        `;
+        slot2Sub.textContent = "True knowledge unlocked";
+
+      } else if (nar === "hermione" || nar === "ron") {
+        if (toast) toast.style.opacity = "0";
+
+        slot1.className = "inv-slot slot-key";
+        setSlotHeader(slot1, "LEARNING MOMENT", "var(--accent)", "key");
+        slot1Text.className = "t-body";
+        slot1Text.textContent = "Harry told us";
+        slot1Sub.textContent = "Acquired by report";
+
+        slot2.className = "inv-slot slot-known";
+        setSlotHeader(slot2, "KNOWN", "var(--known-text)", "known");
+        slot2Text.className = "t-body";
+        slot2Text.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/></svg>
+            <span>It was Quirrell</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="#34d399" stroke="#6ee7b7" stroke-width="2.5"/></svg>
+            <span>Voldemort was hiding in Quirrell</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;border: 1.5px dashed #64748b; padding: 6px 12px; border-radius: 10px;">
+            <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 28,16 16,28 4,16" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="4,3"/></svg>
+            <span style="color: #cbd5e1;">Snape was protecting Harry?</span>
+          </div>
+        `;
+        slot2Sub.textContent = "Quirrell and Voldemort known · Counter-curse unknown";
+
+      } else if (nar === "quirrell") {
+        if (toast) toast.style.opacity = "0";
+
+        slot1.className = "inv-slot slot-known";
+        setSlotHeader(slot1, "STATUS", "var(--text-dim)", "dash");
+        slot1Text.className = "t-body";
+        slot1Text.textContent = "No change";
+        slot1Sub.textContent = "Unchanged";
+
+        slot2.className = "inv-slot slot-unknown";
+        setSlotHeader(slot2, "STATUS", "var(--text-dim)", "dash");
+        slot2Text.className = "t-body";
+        slot2Text.textContent = "No change";
+        slot2Sub.textContent = "Unchanged";
+
+      } else {
+        // Snape
+        if (toast) toast.style.opacity = "0";
+
+        slot1.className = "inv-slot slot-known";
+        setSlotHeader(slot1, "STATUS", "var(--text-dim)", "dash");
+        slot1Text.className = "t-body";
+        slot1Text.textContent = "No change";
+        slot1Sub.textContent = "Pre-existing knowledge";
+
+        slot2.className = "inv-slot slot-unknown";
+        setSlotHeader(slot2, "STATUS", "var(--text-dim)", "dash");
+        slot2Text.className = "t-body";
+        slot2Text.textContent = "No change";
+        slot2Sub.textContent = "No new learning moment";
+      }
+    }
+  }
+
+  // Master render function
+  function render() {
+    const screens = document.querySelectorAll(".screen");
+    screens.forEach(s => {
+      const screenNum = parseInt(s.dataset.screen || "1", 10);
+      const isActive = screenNum === state.screen;
+      s.classList.toggle("active", isActive);
+
+      if (isActive) {
+        // Slide 1 State A vs State B
+        if (screenNum === 1) {
+          s.classList.toggle("state-b", state.step >= 1);
+        } else if (screenNum === 2) {
+          renderSlide2();
+        } else if (screenNum === 3) {
+          renderSlide3();
+        } else if (screenNum === 4) {
+          renderSlide4();
+        }
+      }
+    });
+
+    updateHud();
+    updateHash();
+  }
+
+  // Sync state to URL hash
+  function updateHash() {
+    const hash = `#${state.screen}/${state.narrator}`;
+    if (window.location.hash !== hash) {
+      history.replaceState(null, "", hash);
+    }
+  }
+
+  // Read state from URL hash
+  function parseHash() {
+    const h = window.location.hash.replace(/^#/, "");
+    if (!h) return;
+    const parts = h.split("/");
+    const screenNum = parseInt(parts[0], 10);
+    if (!isNaN(screenNum) && screenNum >= 1 && screenNum <= 5) {
+      state.screen = screenNum;
+      state.step = 0;
+    }
+    if (parts[1] && NARRATORS[parts[1]]) {
+      state.narrator = parts[1];
+    }
+  }
+
+  // Select a narrator
+  function selectNarrator(narKey, thenJumpToSlide2 = false) {
+    if (!NARRATORS[narKey]) return;
+    state.narrator = narKey;
+
+    // Highlight card if on slide 1
+    const slots = document.querySelectorAll(".roster-grid .character-slot");
+    slots.forEach(slot => {
+      const isMatch = slot.dataset.character === narKey;
+      slot.classList.toggle("selected", isMatch);
+      if (isMatch && typeof gsap !== "undefined" && !state.reducedMotion) {
+        const fig = slot.querySelector(".character-figure");
+        gsap.timeline()
+          .to(fig, { y: -24, scale: 1.12, duration: 0.22, ease: "back.out(2)" })
+          .to(fig, { y: 0, scale: 1.0, duration: 0.28, ease: "bounce.out" });
+      }
+    });
+
+    if (thenJumpToSlide2) {
+      setTimeout(() => {
+        state.screen = 2;
+        state.step = 0;
+        render();
+      }, 380);
+    } else {
+      render();
+    }
+  }
+
+  // Navigation handlers
+  function nextStep() {
+    const maxSteps = SCREEN_STEPS[state.screen] || 0;
+    if (state.step < maxSteps) {
+      state.step++;
+      render();
+    } else if (state.screen < 5) {
+      state.screen++;
+      state.step = 0;
+      render();
+    }
+  }
+
+  function prevStep() {
+    if (state.step > 0) {
+      state.step--;
+      render();
+    } else if (state.screen > 1) {
+      state.screen--;
+      state.step = SCREEN_STEPS[state.screen] || 0;
+      render();
+    }
+  }
+
+  // Setup GSAP hover animations for character select on Slide 1
+  function initCharacterAnimations() {
+    if (typeof gsap === "undefined" || state.reducedMotion) return;
+
+    const slots = document.querySelectorAll(".roster-grid .character-slot");
+    slots.forEach(slot => {
+      const fig = slot.querySelector(".character-figure");
+      const glow = slot.querySelector(".feet-glow");
+
+      // Subtle idle breathing loop
+      gsap.to(fig, {
+        y: "-=8",
+        duration: 2.2 + Math.random() * 0.8,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut"
+      });
+
+      slot.addEventListener("mouseenter", () => {
+        slot.classList.add("hovered");
+        gsap.to(fig, { y: -16, scale: 1.06, rotation: -2, duration: 0.25, ease: "power2.out" });
+        gsap.to(glow, { opacity: 0.7, scale: 1.05, duration: 0.25 });
+      });
+
+      slot.addEventListener("mouseleave", () => {
+        slot.classList.remove("hovered");
+        if (!slot.classList.contains("selected")) {
+          gsap.to(fig, { y: 0, scale: 1.0, rotation: 0, duration: 0.3, ease: "power2.out" });
+          gsap.to(glow, { opacity: 0, scale: 0.85, duration: 0.3 });
+        }
+      });
+
+      slot.addEventListener("click", () => {
+        const c = slot.dataset.character;
+        selectNarrator(c, true);
+      });
+
+      slot.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          const c = slot.dataset.character;
+          selectNarrator(c, true);
+        }
+      });
+    });
+  }
+
+  // Keyboard navigation
+  window.addEventListener("keydown", e => {
+    // Number keys 1-4 switch narrator
+    if (e.key === "1") {
+      selectNarrator("harry", state.screen === 1 && state.step === 1);
+    } else if (e.key === "2") {
+      selectNarrator("hermione", state.screen === 1 && state.step === 1);
+    } else if (e.key === "3") {
+      selectNarrator("ron", state.screen === 1 && state.step === 1);
+    } else if (e.key === "4") {
+      selectNarrator("quirrell", state.screen === 1 && state.step === 1);
+    } else if (e.key === "5") {
+      selectNarrator("snape", state.screen === 1 && state.step === 1);
+    } else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") {
+      e.preventDefault();
+      nextStep();
+    } else if (e.key === "ArrowLeft" || e.key === "PageUp" || e.key === "Backspace") {
+      e.preventDefault();
+      prevStep();
+    } else if (e.key === "t" || e.key === "T") {
+      state.showDbTerms = !state.showDbTerms;
+      document.body.classList.toggle("show-db-terms", state.showDbTerms);
+    } else if (e.key === "Home") {
+      state.screen = 1;
+      state.step = 0;
+      render();
+    } else if (e.key === "End") {
+      state.screen = 5;
+      state.step = 0;
+      render();
+    }
+  });
+
+  // Click bindings for interactive buttons
+  document.addEventListener("DOMContentLoaded", () => {
+    initStarrySky();
+    parseHash();
+
+    // Technical labels toggle button
+    const dbBtn = document.getElementById("db-toggle-btn");
+    if (dbBtn) {
+      dbBtn.addEventListener("click", () => {
+        state.showDbTerms = !state.showDbTerms;
+        document.body.classList.toggle("show-db-terms", state.showDbTerms);
+      });
+    }
+
+    // Slide 3 tabs
+    const tabDown = document.getElementById("tab-going-down");
+    const tabHosp = document.getElementById("tab-hospital-wing");
+    if (tabDown) {
+      tabDown.addEventListener("click", () => {
+        state.step = 0;
+        render();
+      });
+    }
+    if (tabHosp) {
+      tabHosp.addEventListener("click", () => {
+        state.step = 1;
+        render();
+      });
+    }
+
+    // Narrator switcher bar buttons
+    document.querySelectorAll(".narrator-nav-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const nar = btn.dataset.navNarrator;
+        selectNarrator(nar);
+      });
+    });
+
+    // Replay buttons on slide 5
+    document.querySelectorAll(".replay-character-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const nar = btn.dataset.replayNarrator;
+        selectNarrator(nar);
+        state.screen = 2;
+        state.step = 0;
+        render();
+      });
+    });
+
+    // Init animations
+    initCharacterAnimations();
+    render();
+  });
+
+  window.addEventListener("hashchange", () => {
+    parseHash();
+    render();
+  });
+
+  // Responsive stage scaling to fit browser window
+  function resizeStage() {
+    const stage = document.getElementById("stage");
+    if (!stage) return;
+    const sw = window.innerWidth / 1920;
+    const sh = window.innerHeight / 1080;
+    const scale = Math.min(sw, sh);
+    stage.style.transform = `scale(${scale})`;
+  }
+  window.addEventListener("resize", resizeStage);
+  resizeStage();
+})();
+</script>
+</body>
+</html>

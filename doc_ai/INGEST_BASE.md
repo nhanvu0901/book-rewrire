@@ -108,7 +108,7 @@ Event, or Mention nodes. Data from other runs is unchanged.
 | `src/pov_retell/ingest/extrac_character.py` | Chapter loading, character validation, IDs, JSON |
 | `src/pov_retell/ingest/models/character_discovery.py` | Character schemas and discovery state |
 | `src/pov_retell/ingest/models/ingest_result.py` | Run result and character output path |
-| `prompt/extract_character.py` | Character extraction prompt |
+| `src/pov_retell/ingest/graph/extract_character/prompt/extract_character.py` | Character extraction prompt |
 | `src/pov_retell/infrastructure/neo4j_store.py` | Connectivity and Character writes |
 
 ## Verification and limits

@@ -1,11 +1,17 @@
 # pov-retell: trích xuất sách và kết nối Neo4j
 
+AI onboarding and operating instructions: [AI-work/README.md](AI-work/README.md).
+Current project knowledge: [AI-work/PROJECT_CONTEXT.md](AI-work/PROJECT_CONTEXT.md).
+
 Đây là bản **tối giản, dễ học** của dự án POV Story Retelling. Trạng thái hiện tại:
 
 1. **Phase A, trích xuất**: đọc một cuốn sách (HTML, EPUB hoặc TXT), tìm cấu trúc chương, cắt thành
    **units** và **paragraphs** có ID cố định, rồi ghi ra **file thường** (JSON + text).
-2. **Character Discovery & Resolution**: đọc tuần tự từng chương trong `units/`, gọi OpenRouter,
-   kiểm tra và lưu JSON nhân vật tích lũy, rồi ghi các trường Character được chọn vào Neo4j.
+2. **Character Extraction**: summarize chapters, then use a general LLM to extract and update
+   complete character profiles chapter by chapter. Each extraction receives the original chapter,
+   the `WHO IS WHO` after chapter N-1 plus chapter summaries 1..N-1, and accumulated profiles. The
+   application assigns IDs, applies explicit merges, and saves selected Character properties to Neo4j
+   after completion.
    Xem [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md) và [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md).
 
 LangGraph điều phối vòng lặp chương, không dùng checkpoint.
@@ -61,10 +67,14 @@ src/pov_retell/
 | 7 | `src/pov_retell/book/paragraphs.py` | A3 |
 | 9 | `src/pov_retell/book/output.py`, `cli.py` | Ghi file, lệnh `pov` |
 | 10 | `src/pov_retell/ingest/pipeline.py` | Hàm `ingest_book`, gọi các graph theo bước |
-| 10a | `src/pov_retell/ingest/graph/character_discovery.py` | Node, edge và state của graph nhân vật |
-| 11 | `src/pov_retell/ingest/extrac_character.py`, `models/character_discovery.py` | Xử lý và kiểm tra danh sách nhân vật, thuộc tính và quan hệ |
+| 10a | `src/pov_retell/ingest/graph/extract_character/graph.py` | Character, relationship, location and scene-map extraction nodes, edges and recursion limit helper |
+| 10b | `src/pov_retell/ingest/graph/extract_character/model.py` | Character, relationship, location, scene-map, response and graph state models |
+| 11 | `src/pov_retell/ingest/graph/extract_character/logic.py`, `identity.py`, `relationship.py`, `location.py`, `scene_map.py` | Full-profile, relationship, location and scene-map LLM calls, merges, history and JSON persistence |
+| 11a | `src/pov_retell/ingest/model.py`, `source.py` | Shared chapter input, pipeline result and source validation |
+| 11b | `src/pov_retell/ingest/graph/summarize_chapter/graph.py` | Sequential chapter summary nodes, edges and recursion limit helper |
+| 11c | `src/pov_retell/ingest/graph/summarize_chapter/model.py`, `logic.py` | Summary models, LLM calls and JSON persistence |
 | 12 | `src/pov_retell/infrastructure/neo4j_store.py` | Kết nối và ghi Character vào Neo4j |
-| 13 | `prompt/extract_character.py` | Prompt Character Discovery & Resolution |
+| 13 | `src/pov_retell/ingest/graph/summarize_chapter/prompt/` (`summarize_chapter.py`, `update_who_is_who.py`, `update_where_is_where.py`, `summarize_book.py`), `src/pov_retell/ingest/graph/extract_character/prompt/` (`extract_character.py`, `extract_relationship.py`, `extract_location.py`, `extract_scene_map.py`) | Chapter summaries, WHO IS WHO, WHERE IS WHERE, book core memory, character, relationship, location and scene-map extraction prompts |
 | - | `src/pov_retell/book/text.py`, `config.py` | Helper nhỏ; settings (gồm `NEO4J_*`) |
 | - | `docker/compose.yml`, `Makefile` | Neo4j 5 community (project `book-clone-dev`), `neo4j-up/down/shell`, `ingest` |
 | - | `docs/INGEST_BASE.md` | Cách chạy ingest, vị trí kết quả và giới hạn hiện tại |
@@ -105,10 +115,18 @@ Sao chép `.env.example` thành `.env` rồi điền đủ giá trị. `.env` kh
 | Biến | Giá trị trong `.env` hiện tại | Dùng cho |
 |---|---|---|
 | `BOOK_CLONE_DATA_DIR` | `<project>/book` | sách nguồn ở `book/books/`, output ở `book/extracted/` |
-| `OPENROUTER_API_KEY` | cần điền | `pov extract` |
+| `OPENROUTER_API_KEY` | cần điền | `pov extract`, `pov ingest` |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | |
-| `OPENROUTER_MODEL` | chọn trong `.env` | Model used for extraction and verification |
-| `OPENROUTER_MAX_TOKENS` | set in `.env` | Positive output-token limit, including reasoning tokens where applicable |
+| `OPENROUTER_MODEL` | set in `.env` | Book structure mapping (`pov extract`) |
+| `OPENROUTER_SUMMARIZE_CHAPTER_MODEL` | set in `.env` | Chapter and cumulative book summaries |
+| `OPENROUTER_EXTRACT_CHARACTER_MODEL` | set in `.env` | Full character profiles, aliases and merges (`pov ingest`) |
+| `OPENROUTER_MAX_TOKENS` | set in `.env` | Output-token limit for `OPENROUTER_MODEL` (`pov extract`) and diagnostics, including reasoning tokens |
+| `OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS` | set in `.env` | Output-token limit for the summary model |
+| `OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS` | set in `.env` | Output-token limit for the character model |
+| `OPENROUTER_EXTRACT_CHARACTER_PROVIDER` | set in `.env` (e.g. `open-inference/fp4` or empty) | Comma-separated provider tags for the extract client; empty uses default routing |
+| `OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS` | `true` or `false` in `.env` | Whether OpenRouter may fall back when `OPENROUTER_EXTRACT_CHARACTER_PROVIDER` is set |
+| `OPENROUTER_EXTRACT_CHARACTER_REASONING` | `none`, `enabled`, `low`, `medium`, or `high` in `.env` | Reasoning configuration sent by the extract client |
+| `OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS` | `true` or `false` in `.env` | `true` sends strict `json_schema` derived from the Pydantic response model; `false` sends `json_object` |
 | `NEO4J_PASSWORD` | đặt trong `.env`, **bắt buộc** cho Neo4j | `make neo4j-up`, `pov ingest`; không bao giờ bị in ra |
 | `NEO4J_USER` | `neo4j` | |
 | `NEO4J_HTTP_PORT` / `NEO4J_BOLT_PORT` | `7475` / `7688` | khác `7474`/`7687` của stack `book-clone` |
@@ -257,17 +275,91 @@ uv run pov ingest narnia-debug
 make neo4j-shell                               # cypher-shell;  make neo4j-down để tắt
 ```
 
-`ingest_book` runs the `character_discovery` LangGraph through all chapters, saving
-cumulative character snapshots and resolving IDs and explicit merges. After discovery
-finishes, it writes the selected Character properties to Neo4j.
+Khi chỉ thử LLM, bỏ qua Neo4j hoàn toàn (không kết nối, không ghi; JSON vẫn được lưu):
 
-Relationship verification has been removed. Character JSON still includes the discovery
-step's relationship proposals; ingestion does not validate their meaning or create
-`RELATES_TO` edges. Existing run data is retained.
+```bash
+uv run pov ingest narnia-debug --no-neo4j
+```
 
-Output: `book/ingest/<book_id>/<run_id>/characters.json` and cumulative snapshots under
-`chapters/`. Each invocation creates a new run; there is no checkpoint or resume.
-See [`doc_ai/INGEST_BASE.md`](doc_ai/INGEST_BASE.md) for details and limitations.
+`ingest_book` validates the extracted chapter files and creates one run directory.
+It runs the `summarize_chapter` graph first, then the `extract_character` graph.
+Each graph keeps its own models and logic in its graph folder.
+
+```text
+load_chapters -> summarize_chapter graph -> extract_character graph -> save_neo4j
+
+summarize_chapter: initialize -> summarize_chapter -> validate_summary -> save_summary -> summarize_book
+                                    ^                                    |
+                                    +----------- next chapter -----------+
+
+extract_character: initialize -> extract_characters -> validate_characters -> extract_relationships -> validate_relationships -> extract_locations -> validate_locations -> extract_scenes -> validate_scenes -> save_json
+                                      ^                                                                                                                                                                            |
+                                      +-------------------------------------------------------------------------- next chapter ------------------------------------------------------------------------------------+
+```
+
+For each chapter, the summary graph makes three plain-text calls:
+1. `summarize_chapter`: writes `chapter_summary` for the current chapter using the previous
+   `WHO IS WHO` and `WHERE IS WHERE` lists, all preceding chapter summaries in order, and the
+   original chapter text.
+2. `update_who_is_who`: updates the complete `WHO IS WHO` character list (`name | aliases or - | identity card`)
+   from the previous `WHO IS WHO` (empty for chapter 1) and the original chapter text, without
+   chapter summaries or the call-1 output. Python validates that each line has three `|` fields
+   and that no earlier character name was dropped, retrying up to two times on violations.
+3. `update_where_is_where`: updates the complete `WHERE IS WHERE` place list (`name | aliases or - | place card`)
+   from the previous `WHERE IS WHERE` (empty for chapter 1) and the original chapter text, without
+   chapter summaries, `WHO IS WHO`, or the call-1 output. Python validates that each line has three
+   `|` fields and that no earlier place name was dropped, retrying up to two times on violations.
+
+After the last chapter, `summarize_book` runs once on all chapter summaries in order to write
+`core_memory` and saves `summaries/book_memory.json` (`{"who_is_who", "where_is_where", "core_memory"}`).
+
+Character extraction uses one general-LLM JSON call per chapter, excluding repair retries.
+Its input contains the original current chapter, complete accumulated profiles, and Python-assembled
+context through the **previous** chapter (the `WHO IS WHO` and `WHERE IS WHERE` after chapter N-1
+plus chapter summaries 1..N-1; empty for u01). It never receives the current or later chapter
+summaries. Summaries are fallible context; the original chapter remains the evidence.
+
+The response contains only changes: new characters, and existing characters who appear in
+or gain information from the chapter, with only the new aliases, attributes and explicit
+identity merges. Omitted characters and null or empty fields keep their stored values. Python
+assigns permanent IDs to `new_N` proposals, keeps the earliest surviving ID on merges, retains
+absent records, and preserves known facts on empty updates. Names do not need to occur
+verbatim in the current chapter, and equal names alone do not merge people.
+
+Personality traits must be explicitly described in the source. New trait wording must also
+occur in the original chapter; existing traits survive later chapters that do not repeat them.
+This source check cannot establish ownership or truth by itself.
+
+The unused ScaleDown experiment was removed on 2026-10-26; historical run data is preserved.
+Model settings stay in `.env`:
+`OPENROUTER_SUMMARIZE_CHAPTER_MODEL` and `OPENROUTER_EXTRACT_CHARACTER_MODEL` select the
+active models. The user can replace either model without changing the graph.
+
+For N chapters, ingestion uses 3N+1 summary calls and 4N extraction calls (`N` character calls, `N` relationship calls, `N` location calls, and `N` scene-map calls) before retries.
+Only after all chapters finish does it write selected Character properties to Neo4j.
+It does not yet write `RELATES_TO` edges, `Location` nodes, or `Scene` nodes to Neo4j.
+
+Output under `book/ingest/<book_id>/<run_id>/`:
+
+- `summaries/u01.summary.json`, etc.: per-chapter `chapter_id`, `chapter_summary`, `who_is_who`, and `where_is_where`.
+- `summaries/book_memory.json`: final `who_is_who`, `where_is_where`, and `core_memory`.
+- `chapters/u01.proposed.json`, etc.: original full-profile LLM proposals.
+- `chapters/u01.characters.json`, etc.: cumulative accepted character snapshots.
+- `chapters/u01.relationships.proposed.json`, etc.: original relationship LLM proposals.
+- `chapters/u01.relationships.json`, etc.: cumulative accepted relationship snapshots.
+- `chapters/u01.locations.proposed.json`, etc.: original location LLM proposals.
+- `chapters/u01.locations.json`, etc.: cumulative accepted location snapshots.
+- `chapters/u01.scenes.proposed.json`, etc.: original scene-map LLM proposals.
+- `chapters/u01.scenes.json`, etc.: validated per-chapter scene segments with `segment_id` (`u01_s1`, ...).
+- `identity_redirects.json`: retired IDs mapped to surviving IDs.
+- `characters.json`: the latest accepted character list.
+- `relationships.json`: the latest accepted relationship list.
+- `locations.json`: the latest accepted location list.
+
+Model names are printed before each graph is built. Each invocation creates a new run;
+there is no checkpoint or resume. A failed run retains completed files and does not reach
+the final Neo4j write. See [`AI-work/handoffs/HANDOFF_2026-10-22.md`](AI-work/handoffs/HANDOFF_2026-10-22.md)
+for the historical experiments that led to restoring this workflow.
 
 `docker/compose.yml` chỉ có Neo4j và đặt project name `book-clone-dev` (không phải `book-clone`), nên
 container, network và **volume khác hẳn** stack `book-clone` đang chạy. Cổng host cũng khác để không
@@ -276,5 +368,5 @@ container, network và **volume khác hẳn** stack `book-clone` đang chạy. C
 
 ## 9. Tiếp theo
 
-Xem [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md): thiết kế Character Discovery & Resolution,
+Xem [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md): thiết kế Character Extraction & Resolution,
 JSON nhân vật tích lũy theo chương và các trường được lưu vào Neo4j.

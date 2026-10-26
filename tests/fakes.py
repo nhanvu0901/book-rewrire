@@ -1,0 +1,80 @@
+"""A fake LLM: lets the tests run the LLM-map code path with no network and no money."""
+
+from collections.abc import Callable
+from typing import Any, TypeVar
+
+from pydantic import BaseModel
+
+from pov_retell.book.candidates import find_candidates
+from pov_retell.book.models import BookFormat, Candidate
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class FakeLLM:
+    """Implements `JsonLLM`. Like the real client it validates the answer with Pydantic and runs
+    `check`, but it does not retry: a rejected answer raises, so tests see the exact problem."""
+
+    def __init__(self, answer: Callable[[str], dict[str, Any]]) -> None:
+        self.answer = answer
+        self.prompts: list[str] = []
+
+    def complete_json(
+        self, prompt: str, schema: type[T], check: Callable[[T], None] | None = None
+    ) -> T:
+        self.prompts.append(prompt)
+        value = schema.model_validate(self.answer(prompt))
+        if check is not None:
+            check(value)
+        return value
+
+
+def sample_llm(content: bytes, fmt: BookFormat) -> FakeLLM:
+    """Return a fake classifier for the invented story in the requested format."""
+    _, candidates = find_candidates(content, fmt)
+    return FakeLLM(lambda prompt: classify_like_an_llm(candidates))
+
+
+def classify_like_an_llm(candidates: list[Candidate]) -> dict[str, Any]:
+    """What a good model would answer for the invented sample story."""
+    items: list[dict[str, Any]] = []
+    part: str | None = None
+    for index, cand in enumerate(candidates):
+        text = cand.text
+        next_cand = candidates[index + 1] if index + 1 < len(candidates) else None
+        following = next_cand.text if next_cand else ""
+        parent: str | None = None
+        if "gutenberg" in text.lower() or text.startswith("Licence"):
+            role, kind = "license", "front"
+        elif text in ("CONTENTS", "The Lantern Keeper") or (
+            cand.kind == "toc_link" and "Chapter" in text
+        ):
+            role, kind = "toc", "front"
+        elif text.startswith("PART") and following.startswith("PART"):
+            role, kind = "toc", "front"  # a part line right before another one: a contents list
+        elif text.startswith("PART"):
+            role, kind, part = "part_heading", "part", cand.cand_id
+        elif text.upper().startswith("CHAPTER"):
+            role, kind, parent = "body_unit", "chapter", part
+        else:
+            role, kind = "front", "front"  # a subtitle such as "The Lamp"
+        title = text.title() if role == "part_heading" else text
+        if (
+            role in ("part_heading", "body_unit")
+            and next_cand is not None
+            and next_cand.kind == "heading"
+            and following
+            and not following.upper().startswith(("PART", "CHAPTER"))
+            and "licen" not in following.lower()
+        ):
+            title = f"{text.rstrip('. ')}: {following}"
+        items.append(
+            {
+                "cand_id": cand.cand_id,
+                "role": role,
+                "unit_kind": kind,
+                "title": title,
+                "parent_cand_id": parent,
+            }
+        )
+    return {"items": items}

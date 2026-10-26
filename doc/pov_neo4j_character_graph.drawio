@@ -1,0 +1,103 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<mxfile host="app.diagrams.net" modified="2026-10-19T22:39:00.000Z" agent="ChatGPT" version="24.7.17" type="device">
+  <diagram id="pov-neo4j-only" name="Neo4j POV Knowledge Graph">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1520" math="0" shadow="0" background="#091322">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="e_rel" value="RELATES_TO" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#73BFFF;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="character_a" target="character_b">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="670" y="217"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_exp" value="EXPERIENCED" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#74DEBF;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="character_a" target="event">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_part" value="PARTICIPATED_IN" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#74DEBF;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="character_b" target="event">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_said" value="SAID" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#B8ABFF;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="character_b" target="utterance">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_has" value="HAS_CLAIM" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#F8CF85;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="event" target="claim">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_assert" value="ASSERTS" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#D0A7FF;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="utterance" target="claim">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_loc" value="OCCURRED_AT" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#F1BD8B;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="event" target="location">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1690" y="780"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_acq" value="ACQUIRED" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#CAA5FF;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="character_a" target="knowledge">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_about" value="ABOUT" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;endSize=15;strokeWidth=3;strokeColor=#E8D094;fontColor=#F8FAFC;fontSize=17;fontStyle=1;labelBackgroundColor=#102034;align=center;verticalAlign=middle;" edge="1" parent="1" source="knowledge" target="claim">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="character_a" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:Character&lt;/div&gt;&lt;div style=&quot;font-size:15px;font-weight:bold;color:#65B9FF;padding-top:3px&quot;&gt;A · POV&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  name&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;aliases[]&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;role  ·  importance_score&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;evidence_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#173E61;strokeColor=#65B9FF;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="135" y="320" width="260" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="character_b" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:Character&lt;/div&gt;&lt;div style=&quot;font-size:15px;font-weight:bold;color:#65B9FF;padding-top:3px&quot;&gt;B&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  name&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;aliases[]&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;role  ·  importance_score&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;evidence_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#173E61;strokeColor=#65B9FF;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1065" y="135" width="260" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="utterance" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:Utterance&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  text&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;speaker_id  ·  type&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;audience_ids[]&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;source_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#453967;strokeColor=#B8ABFF;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1880" y="215" width="260" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="event" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:Event&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  type&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;summary&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;story_order  ·  time_hint&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;source_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#135746;strokeColor=#60E1AC;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="610" width="260" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="location" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:Location&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  name&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;aliases[]&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;kind&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;source_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#654A31;strokeColor=#EEC594;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="2075" y="740" width="260" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="knowledge" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:KnowledgeAcquisition&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  channel&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;learned_at_event_id&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;stance  ·  confidence&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;source_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#4D2D69;strokeColor=#D0A7FF;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="200" y="1080" width="270" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="claim" value="&lt;div style=&quot;text-align:center&quot;&gt;&lt;div style=&quot;font-family:Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;color:#FFFFFF&quot;&gt;:Claim&lt;/div&gt;&lt;div style=&quot;margin:10px auto 8px;width:55px;border-top:1px solid #FFFFFF66&quot;&gt;&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;id  ·  statement&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;claim_type  ·  polarity&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;truth_status&lt;/div&gt;&lt;div style=&quot;font-size:14px;line-height:1.6;color:#EAF2FD&quot;&gt;source_refs[]&lt;/div&gt;&lt;/div&gt;" style="ellipse;shape=ellipse;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#624C24;strokeColor=#FFE18B;strokeWidth=3;fontColor=#FFFFFF;spacing=12;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="1110" width="270" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_rel" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#73BFFF&quot;&gt;RELATES_TO &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;kind · valid_from/to · viewpoint · evidence · confidence · status&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="517.5" y="178.0" width="505" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_exp" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#74DEBF&quot;&gt;EXPERIENCED &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;role · perception · evidence&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="579.0" y="548.0" width="292" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_part" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#74DEBF&quot;&gt;PARTICIPATED_IN &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;role · perception&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1234.0" y="509.0" width="252" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_said" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#B8ABFF&quot;&gt;SAID &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;delivery · evidence&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1538.0" y="184.0" width="234" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_has" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#F8CF85&quot;&gt;HAS_CLAIM &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;evidence&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="907.0" y="997.0" width="216" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_assert" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#D0A7FF&quot;&gt;ASSERTS &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;speech_act&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1737.5" y="642.0" width="215" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_loc" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#F1BD8B&quot;&gt;OCCURRED_AT &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;evidence&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1514.0" y="808.0" width="256" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_acq" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#CAA5FF&quot;&gt;ACQUIRED &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;via channel · at time&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="117.5" y="796.0" width="275" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="rel_note_e_about" value="&lt;div style=&quot;font-size:18px;font-weight:700;color:#E8D094&quot;&gt;ABOUT &amp;nbsp;→&lt;/div&gt;&lt;div style=&quot;font-size:13px;color:#CBD5E1;padding-top:3px&quot;&gt;fact/claim learned&lt;/div&gt;" style="rounded=1;arcSize=16;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;fillColor=#112239;strokeColor=#31435B;strokeWidth=1;fontColor=#F8FAFC;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="657.0" y="1163.0" width="246" height="54" as="geometry"/>
+        </mxCell>
+        <mxCell id="title" value="&lt;b&gt;CHARACTER POV · NEO4J KNOWLEDGE GRAPH&lt;/b&gt;" style="rounded=0;html=1;fillColor=none;strokeColor=none;fontColor=#F8FAFC;fontSize=33;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="30" width="1550" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="Colored circles are Neo4j node labels + properties; arrows are typed relationships with edge properties." style="html=1;fillColor=none;strokeColor=none;fontColor=#AFC1D9;fontSize=17;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="94" width="1800" height="36" as="geometry"/>
+        </mxCell>
+        <mxCell id="note_bottom" value="&lt;b&gt;MODEL RULE:&lt;/b&gt; A character witnessing an event does not automatically know every claim in it. ACQUIRED + ABOUT records exactly what becomes known and when. All evidence is referenced by IDs, not duplicated as source nodes." style="rounded=1;arcSize=16;html=1;fillColor=#122438;strokeColor=#31435B;fontColor=#DCEAFF;fontSize=16;align=center;verticalAlign=middle;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="55" y="1441" width="2280" height="52" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

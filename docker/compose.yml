@@ -1,0 +1,40 @@
+# Neo4j for the ingest base (LangGraph -> Neo4j). Nothing else: no Postgres.
+#
+#   Neo4j Browser   http://localhost:7475   (container port 7474)
+#   Bolt            bolt://localhost:7688   (container port 7687; what the Python driver uses)
+#
+# The project name is "book-clone-dev", NOT "book-clone": Docker Compose prefixes containers,
+# network and volumes with it, so this stack never touches the volumes of the other stack
+# (project "book-clone") that may be running on the same machine. The host ports differ for the
+# same reason: that stack owns 7474 and 7687. Python and Docker Compose both read .env.
+#
+# All values come from the repository's .env file:
+#   NEO4J_PASSWORD   required, at least 8 characters (Neo4j refuses shorter ones)
+# `make neo4j-up` passes .env explicitly to Docker Compose.
+#
+# APOC (extra Cypher procedures) is optional and off by default. To enable it, set in .env:
+#   NEO4J_PLUGINS=["apoc"]
+name: book-clone-dev
+
+services:
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:?set NEO4J_USER}/${NEO4J_PASSWORD:?set NEO4J_PASSWORD (at least 8 characters)}
+      NEO4J_PLUGINS: ${NEO4J_PLUGINS?set NEO4J_PLUGINS}
+    ports:
+      - "127.0.0.1:${NEO4J_HTTP_PORT:?set NEO4J_HTTP_PORT}:7474"
+      - "127.0.0.1:${NEO4J_BOLT_PORT:?set NEO4J_BOLT_PORT}:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      # $$ stops Compose from substituting; the shell inside the container strips "neo4j/".
+      test: ["CMD-SHELL", "cypher-shell -u \"$${NEO4J_AUTH%%/*}\" -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  neo4j_data:

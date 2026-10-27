@@ -252,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
                     "summarize_chapter": settings.OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS,
                     "extract_character": settings.OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS,
                 },
+                "summary_reasoning": settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
                 "extract_character": {
                     "provider": settings.OPENROUTER_EXTRACT_CHARACTER_PROVIDER,
                     "allow_fallbacks": settings.OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS,
@@ -294,6 +295,7 @@ def main(argv: list[str] | None = None) -> int:
                         client=transport,
                         model=settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL,
                         max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
+                        reasoning=settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
                     ),
                     recorder.step,
                 )

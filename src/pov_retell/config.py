@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str
     OPENROUTER_MODEL: str
     OPENROUTER_SUMMARIZE_CHAPTER_MODEL: ModelName
+    OPENROUTER_SUMMARIZE_CHAPTER_REASONING: ReasoningMode
     OPENROUTER_EXTRACT_CHARACTER_MODEL: ModelName
     # Output-token limits, including reasoning tokens. Each must fit its model's limit.
     OPENROUTER_MAX_TOKENS: PositiveInt

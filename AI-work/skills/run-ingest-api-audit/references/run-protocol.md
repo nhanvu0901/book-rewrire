@@ -5,7 +5,8 @@
 Use the existing `.venv` through `uv run`; do not install or change dependencies just to audit.
 Read the current graph builders and Settings key names, because dated handoffs can be stale.
 The runner uses `OPENROUTER_SUMMARIZE_CHAPTER_MODEL` with its summary token cap, and
-`OPENROUTER_EXTRACT_CHARACTER_MODEL` with its extraction cap. It does not override reasoning.
+`OPENROUTER_EXTRACT_CHARACTER_MODEL` with its extraction cap. It uses the configured reasoning
+mode for each client.
 
 The bundled two-chapter smoke story tests a revealed identity, preserved appearance, and an
 explicit trait. Book mode calls `load_chapters` to validate the original extraction before

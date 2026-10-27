@@ -1,6 +1,6 @@
 # Current Project Context
 
-Updated: 2026-10-26. This is the concise onboarding reference, not a session transcript.
+Updated: 2026-10-27. This is the concise onboarding reference, not a session transcript.
 Read [root AGENTS.md](../AGENTS.md) before acting. Verify mutable settings and source when needed.
 
 ## Goal and Boundaries
@@ -184,6 +184,11 @@ Do not paste secrets or the whole `.env`. Required names include:
 
 - `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_MODEL` for structure mapping.
 - `OPENROUTER_SUMMARIZE_CHAPTER_MODEL`, `OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS`.
+- `OPENROUTER_SUMMARIZE_CHAPTER_REASONING` is read by `Settings` and passed to the summary
+  client in both the CLI and audit runner. On 2026-10-27 the user set it to `medium` in the
+  local `.env`; text requests send `reasoning: {"effort": "medium"}`. The `none` setting
+  omits the reasoning parameter and uses the provider default. This change has not been
+  verified against the live provider.
 - `OPENROUTER_EXTRACT_CHARACTER_MODEL`, `OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS`.
 - `OPENROUTER_EXTRACT_CHARACTER_PROVIDER` (comma-separated provider tags; empty = default routing),
   `OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS` (`bool`),
@@ -217,7 +222,7 @@ Implemented in `T-0005`: the extract client (`cli.py` and `run_api_audit.py`) re
 and all properties required on every object, excluding `exclude=True` fields such as
 `identity_context`), `provider` (`only`, `allow_fallbacks`, and `require_parameters: true`
 when structured outputs are enabled), and `reasoning` (`{"enabled": true}` or
-`{"effort": "<level>"}`), while leaving the summary client request unchanged. Not yet verified
+`{"effort": "<level>"}`); summary reasoning was wired separately on 2026-10-27. Not yet verified
 live with `open-inference/fp4`.
 
 ## Data and Evidence Locations
@@ -267,6 +272,43 @@ single-character input did not eliminate them. Read handoffs for exact source/ar
   T-0011 (remove the unused ScaleDown experiment) is `verified` (2026-10-26). T-0009 (LangSmith env export) is a
   `draft` awaiting the user's choice. Order and board:
   [tickets/README.md](tickets/README.md).
+- The working-tree presentation file inspected on 2026-10-26 currently has eight `data-screen`
+  sections, with a character selector on slide 2. This differs from the five-slide T-0010
+  Revision 5 ticket snapshot above; the file is modified in the working tree. A direct user
+  request changed slide 2 to keep four character positions stable and show a translucent
+  attribute card only while a character is hovered or keyboard-focused. The card sits beside
+  that character, follows pointer height within the slide bounds, and hides on leave; click or
+  Enter/Space locks the POV.
+  Headless Chrome screenshots were inspected at 1920×1080, 1280×720, 1024×768, 900×700,
+  and 800×600;
+  JavaScript syntax and keyboard selection were checked. This is a slide-2 UI check, not a
+  review of the whole deck.
+- A later direct UI pass on 2026-10-26 inspected current slides 2–8 at 1280×720 and
+  1920×1080. The Sprint 1 SVG now sizes within its card; node hover changes its glow and
+  circle stroke without replacing the SVG node's `translate(...)` position. Short-viewport
+  spacing keeps the content of slides 4–7 (including the Chapter 17 timeline state) and the
+  slide-8 replay bar above navigation; the
+  pipeline displays five steps in one row. Headless checks exercised the then-existing graph
+  label toggle and replay, pipeline simulation, timeline toggle, notes, and replaying a selected POV.
+- A subsequent presentation polish pass on 2026-10-26 changed the eight-slide deck's visible
+  copy and speaker notes to plainer English and softened its palette, type, panels, and glow.
+  The slide sequence, story facts, metrics, and interactive JavaScript were retained. All eight
+  slides rendered without visible clipping in headless Chrome at 1280×720 and 1920×1080;
+  the inline script passed `node --check`, and `git diff --check` was clean. The requested
+  `gpt-5.6-sol` context-maintenance model was unavailable, so this bounded update was made
+  directly rather than attributed to a sub-agent.
+- On 2026-10-27, a direct presentation request removed the persistent POV lens badge, the
+  Sprint 1 source-path label, story-label toggle, and model-rule banner. The user's follow-up
+  removed the replay button: Sprint 1 now enters with the first of four graph groups visible;
+  Next, Space, ArrowRight, and PageDown reveal the next group before advancing slides. Prev,
+  ArrowLeft, and PageUp reverse the groups, and returning from slide 4 shows the complete graph.
+  Sprint 2 and Sprint 3 copy/notes use plain English and a concrete before/after Harry example.
+  The pipeline trace is explicitly an illustrative example; the knowledge timeline is labeled
+  as a design. The existing numeric metrics were retained without a new factual audit.
+  Headless Chrome checks verified all four graph states, forward/back navigation, the pipeline
+  demo, and absence of runtime errors. Slides 3–7 were rendered at 1280×720 and 1920×1080;
+  the revised Sprint 2/3 slides were visually inspected at 1280×720. This context update was
+  performed directly because the requested `gpt-5.6-sol` model was unavailable.
 - For a requested real API audit, load [run-ingest-api-audit](skills/run-ingest-api-audit/SKILL.md).
   The initiating model owns the run, analysis, and suggested fixes. Terra observes and escalates.
 - The skill-local runner calls current production graphs, captures HTTP responses before client
@@ -399,6 +441,8 @@ A passing schema/test suite is not factual story validation.
 - Revisit whether call 1 should receive only the last K chapter summaries for longer books (currently receives all).
 - Improve identity resolution, evidence attribution, relationship direction, and memory retention.
 - Incremental Neo4j writes and similarity retrieval were discussed, not implemented or selected.
+- Live-check whether summary reasoning `medium` is honored by the configured provider and
+  whether it avoids the u14 WHO IS WHO repetition; offline request checks cannot establish this.
 - Relationship verification, events, knowledge over time, and retelling remain future stages.
 - Do not implement these pending ideas during an audit or context-maintenance pass.
 

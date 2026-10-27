@@ -14,6 +14,7 @@ def env_text(data_dir: Path, password: str = "") -> str:
         "OPENROUTER_BASE_URL=https://openrouter.ai/api/v1\n"
         "OPENROUTER_MODEL=openai/gpt-4o-mini\n"
         "OPENROUTER_SUMMARIZE_CHAPTER_MODEL=example/summary\n"
+        "OPENROUTER_SUMMARIZE_CHAPTER_REASONING=medium\n"
         "OPENROUTER_EXTRACT_CHARACTER_MODEL=example/characters\n"
         "OPENROUTER_MAX_TOKENS=8192\n"
         "OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS=4096\n"
@@ -48,6 +49,7 @@ def test_values_come_from_one_env_file(tmp_path: Path) -> None:
     assert settings.OPENROUTER_BASE_URL == "https://openrouter.ai/api/v1"
     assert settings.OPENROUTER_MODEL == "openai/gpt-4o-mini"
     assert settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL == "example/summary"
+    assert settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING == "medium"
     assert settings.OPENROUTER_EXTRACT_CHARACTER_MODEL == "example/characters"
     assert settings.OPENROUTER_MAX_TOKENS == 8192
     assert settings.OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS == 4096

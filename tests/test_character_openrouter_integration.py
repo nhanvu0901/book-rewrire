@@ -48,6 +48,7 @@ def test_real_summaries_and_character_extraction_preserve_a_revealed_identity(
                 client=transport,
                 model=settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL,
                 max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
+                reasoning=settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
             ),
             extracted_dir=tmp_path / "extracted",
             ingest_dir=tmp_path / "ingest",

@@ -259,6 +259,7 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
     assert state["http_calls"] == 15
     manifest = json.loads((output / "manifest.json").read_text())
     assert manifest["neo4j_writes"] is False
+    assert manifest["summary_reasoning"] == "medium"
     assert manifest["extract_character"] == {
         "provider": "open-inference/fp4",
         "allow_fallbacks": False,
@@ -268,7 +269,7 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
     summary_req = json.loads((output / "http/http_0001.request.json").read_text())["request"]
     assert summary_req["response_format"] is None
     assert summary_req["provider"] is None
-    assert summary_req["reasoning"] is None
+    assert summary_req["reasoning"] == {"effort": "medium"}
     extract_req = json.loads((output / "http/http_0008.request.json").read_text())["request"]
     assert extract_req["response_format"]["type"] == "json_schema"
     assert extract_req["response_format"]["json_schema"]["strict"] is True

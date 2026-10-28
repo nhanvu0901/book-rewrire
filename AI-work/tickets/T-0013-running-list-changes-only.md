@@ -1,8 +1,8 @@
 ---
 id: T-0013
 title: WHO IS WHO and WHERE IS WHERE return changes only, merged by a reducer
-status: ready
-owner: user (Vu Trong Nhan)
+status: done
+owner: Claude (at the user's request)
 branch: ticket/T-0013-glm-card-updates
 priority: medium
 created: 2026-10-27
@@ -381,3 +381,70 @@ chapters, but only with the user's OK.
 - **R2-2.** The four Revision 1 open questions were answered with their defaults:
   sequential nodes, no `merge`, no IDs in saved files. Question 4 (which client) is now
   answered by this revision. Default: keep them.
+
+## Completion report (Revision 2, 2026-10-28)
+
+Implemented by Claude at the user's explicit request ("you do that"). The PM role normally
+does not write application code. This Completion report and any review of it come from the
+same agent, so another agent or the user should review it independently.
+
+Commit: `48b0c3c` on `ticket/T-0013-glm-card-updates` (from `main` `0d9bb2f`).
+
+### Changes
+
+- `graph.py`: `build_summarize_chapter_graph(llm: TextLLM, card_llm: JsonLLM, on_step)`.
+  `update_who_is_who` and `update_where_is_where` call `card_llm`.
+- `pipeline.py`: `ingest_book` passes `character_llm`, the extract client, as `card_llm`.
+  In `pov ingest` that client is GLM with the provider pin, structured outputs and
+  reasoning from `OPENROUTER_EXTRACT_CHARACTER_*`. `cli.py` is unchanged. `summary_llm`
+  is typed `TextLLM` again, and `SummarizeLLM` is removed from `llm.py`.
+- `model.py`: new `CardText` (`strip_whitespace=True, min_length=1`, no `pattern`) for
+  `Card` and `CardUpdate`. `SummarizeChapterResponse` and the `proposed` key are removed.
+  `ChapterSummary` defines its own fields.
+- Both update prompts: the format paragraph now describes the JSON fields `name`,
+  `other_names` and `card`, with the same word limits. The empty `*_REMINDER` constants
+  are removed.
+- `logic.py`: `_running_list_lines`, `validate_running_list`, `validate_who_is_who`,
+  `validate_where_is_where` and the `_name_key` alias are removed.
+
+### Deviations
+
+- **`ChapterSummary.who_is_who` / `where_is_where` and the same `BookMemory` fields accept an
+  empty string** (they were `SummaryText`). With changes-only replies, a chapter that names
+  no character or no place yet leaves the list empty. Revision 1 then crashed in
+  `validate_summary`. The tests exposed this once the card calls moved to a client whose
+  default answer is "no changes".
+- `cli.py` needed no change, because `ingest_book` already receives the extract client.
+- Test fakes: `ScriptedLLM` has a separate `cards` queue and `card_prompts` list, plus
+  `split_card_answers` and `summary_cards` helpers. Tests that used the real client with
+  a fake transport put the card answers first, because the summary graph runs before
+  extraction. Their request indexes moved by 2 per chapter.
+
+### Acceptance criteria (Revision 2)
+
+| Criterion | Evidence |
+| --- | --- |
+| Card updates go to `card_llm`, summaries go to `summary_llm` | `test_card_updates_go_to_the_card_client_and_summaries_to_the_summary_client`, using two fakes that fail on the other's call |
+| `pov ingest` uses the extract settings for cards | `ingest_book` passes `character_llm`. `test_cli_selects_summary_and_full_profile_models_and_closes_driver` already checks that client's settings. `test_ingest_extracts_full_profiles...` asserts `llm.card_prompts == 4` and `summaries.prompts == 3` |
+| Schema has no `pattern`; every object is strict | `test_card_changes_schema_has_no_regex_pattern_and_is_strict` |
+| Prompts ask for JSON, not `|` lines | `test_update_prompts_ask_for_json_entries_not_pipe_lines` |
+| Removed names | `grep` over `src tests` is empty |
+| Failures mid-run keep `u01` | `test_card_update_failure_in_chapter_two_keeps_chapter_one_saved[who_is_who / where_is_where]`, `test_summary_failure_in_chapter_two_keeps_chapter_one_saved` |
+| Suite, lint, format, types | below |
+
+Also added: `test_chapter_without_characters_or_places_saves_empty_lists`.
+
+### Commands and results
+
+- `uv run pytest -q`: **300 passed, 4 skipped** (`main` before: 293 passed; +7 new tests)
+- `uv run ruff check src tests`: all checks passed
+- `uv run ruff format --check src tests`: 65 files already formatted
+- `uv run mypy src`: no issues in 44 source files
+- `git diff --check`: clean
+
+### Not done
+
+- No live run. Next step, with the user's OK: 1–2 real chapters, to confirm that GLM
+  returns valid `CardChanges` with strict structured outputs.
+- The context-maintenance pass is pending. `AI-work/PROJECT_CONTEXT.md` has uncommitted
+  edits by the user, so it was not touched.

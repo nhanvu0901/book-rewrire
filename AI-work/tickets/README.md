@@ -72,7 +72,7 @@ every review is committed.
 | [T-0010](T-0010-pov-graph-slides.md) | HTML slide deck; the user's 8-slide deck replaced Revision 5 | verified | Antigravity (Gemini 4 Argon) | 2026-10-28 |
 | [T-0011](T-0011-remove-scaledown-experiment.md) | Remove the unused ScaleDown experiment and its required setting | verified | Codex (GPT-6) | 2026-10-26 |
 | [T-0012](T-0012-running-list-quote-normalization.md) | Running lists treat straight and curly quotes as the same name | verified | Antigravity (Gemini 4 Argon) | 2026-10-28 |
-| [T-0013](T-0013-running-list-changes-only.md) | WHO IS WHO and WHERE IS WHERE return changes only; Revision 2 moves card updates to GLM | ready | user (Vu Trong Nhan) | 2026-10-28 |
+| [T-0013](T-0013-running-list-changes-only.md) | WHO IS WHO and WHERE IS WHERE return changes only; Revision 2 moves card updates to GLM | done | Claude (at the user's request) | 2026-10-28 |
 
 ## Recommended order
 

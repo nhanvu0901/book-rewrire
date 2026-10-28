@@ -71,13 +71,15 @@ every review is committed.
 | [T-0009](T-0009-langsmith-env.md) | LangSmith tracing works for `pov ingest` without an env-file flag | draft | unassigned | 2026-10-25 |
 | [T-0010](T-0010-pov-graph-slides.md) | HTML slide deck (4–5 min), game style, ShiftKey structure, real sprint content (Revisions 4–5) | done | Antigravity (Gemini 4 Argon) | 2026-10-26 |
 | [T-0011](T-0011-remove-scaledown-experiment.md) | Remove the unused ScaleDown experiment and its required setting | verified | Codex (GPT-6) | 2026-10-26 |
+| [T-0012](T-0012-running-list-quote-normalization.md) | Running lists treat straight and curly quotes as the same name | done | Antigravity (Gemini 4 Argon) | 2026-10-27 |
 
 ## Recommended order
 
 Implement one ticket at a time; T-0004 to T-0008 touch the same graph, pipeline and audit runner.
 
 T-0002 to T-0008 are verified offline (2026-10-25).
-1. Live check of T-0002 to T-0008 after the extract model is switched to GLM in `.env` and the user gives the OK.
-2. T-0010: fix the Revision 4 review findings and apply Revision 5 (real sprint content) together.
+1. T-0012 (quote normalization) first: it blocks the real summary run of Harry Potter at chapter 6.
+2. Live check of T-0002 to T-0008 after the extract model is switched to GLM in `.env` and the user gives the OK.
+3. T-0010: fix the Revision 4 review findings and apply Revision 5 (real sprint content) together.
 T-0011 (remove ScaleDown) is verified (2026-10-26).
 T-0009 waits for the user's choice.

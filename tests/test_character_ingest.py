@@ -204,8 +204,54 @@ def summary_client(chapter_count: int) -> ScriptedLLM:
     responses: list[str | dict[str, Any] | Exception] = []
     for index in range(1, chapter_count + 1):
         responses.append(f"Summary of chapter {index}.")
-        responses.append(f"Mara | - | traveler in chapter {index}")
-        responses.append(f"The Gate | - | stone gate in chapter {index}")
+        responses.append(
+            {
+                "add": [
+                    {
+                        "name": "Mara",
+                        "other_names": [],
+                        "card": f"traveler in chapter {index}",
+                    }
+                ],
+                "update": [],
+            }
+            if index == 1
+            else {
+                "add": [],
+                "update": [
+                    {
+                        "id": "C001",
+                        "name": "Mara",
+                        "other_names": [],
+                        "card": f"traveler in chapter {index}",
+                    }
+                ],
+            }
+        )
+        responses.append(
+            {
+                "add": [
+                    {
+                        "name": "The Gate",
+                        "other_names": [],
+                        "card": f"stone gate in chapter {index}",
+                    }
+                ],
+                "update": [],
+            }
+            if index == 1
+            else {
+                "add": [],
+                "update": [
+                    {
+                        "id": "P001",
+                        "name": "The Gate",
+                        "other_names": [],
+                        "card": f"stone gate in chapter {index}",
+                    }
+                ],
+            }
+        )
     responses.append("Core memory of the book.")
     return ScriptedLLM(responses)
 

@@ -2,7 +2,7 @@
 id: T-0013
 title: WHO IS WHO and WHERE IS WHERE return changes only, merged by a reducer
 status: ready
-owner: unassigned
+owner: user (Vu Trong Nhan)
 branch: ticket/T-0013-glm-card-updates
 priority: medium
 created: 2026-10-27

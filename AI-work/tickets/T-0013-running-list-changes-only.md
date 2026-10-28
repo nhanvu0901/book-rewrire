@@ -261,7 +261,10 @@ None", but:
 - `scratch/changes_only_lists.py` and `scratch/reducer_playground.py` were committed in
   `714415a`. They are the user's learning files, not ticket work.
 
-Record these in the report. Ask the user whether the scratch files stay in this branch.
+Record these in the report.
+
+User decision (2026-10-28): the scratch files leave this branch. The reviewer removed
+them from Git tracking in the next commit; the files stay on disk, untracked.
 
 ### Notes (no change requested)
 

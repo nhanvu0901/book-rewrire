@@ -1,11 +1,11 @@
 ---
 id: T-0010
 title: "HTML slide deck (4–5 min): POV retelling and the character knowledge graph, Harry Potter example"
-status: done
+status: verified
 owner: Antigravity (Gemini 4 Argon)
 priority: medium
 created: 2026-10-25
-updated: 2026-10-26
+updated: 2026-10-28
 depends_on: []
 ---
 
@@ -1664,3 +1664,54 @@ Automated verifications executed via Playwright (`scratch/check_r5_full.py` and 
 ### Status
 
 Ready for Product Manager review. Status set to `done`.
+
+## Review of Revision 5 (2026-10-28)
+
+Reviewed by Claude (product manager). Verdict: **verified, closed as superseded by the
+user's own deck**.
+
+### What the reviewer found
+
+- The Revision 5 deck from the Completion report is in `ba0bfd3`: 5 slides, "Carries a
+  secret", the `#N/narrator` hash and the `T` key.
+- The user then replaced it in `8a6435c` ("slide sprint 1 done") and `182bf4b`. The current
+  `doc/presentation/pov-graph-slides.html` is a different deck:
+  - 8 slides: POV Graph, Choose a point of view, Sprint 1, Sprint 2 ×2, Sprint 3 ×2,
+    What's Next for Me;
+  - Prev/Next and Notes buttons, no narrator hash and no `T` key;
+  - a 5-minute rehearsal script in `doc/presentation/presentation-script-5min.md`.
+- The Revision 4 and 5 acceptance criteria describe the replaced deck, so they were not
+  checked against the current one. The user owns the current design. This ticket is closed.
+
+### Sanity check of the current deck (`182bf4b`)
+
+Script: `/private/tmp/claude-501/-Users-nhanvu-Documents-code-book-clone/396a1be9-3c31-4139-b9fa-1d9358898140/scratchpad/check_deck8.py`. It runs Playwright with the system Chrome, steps through
+every build step of all 8 slides at 1920×1080 and 1280×720, and records 56 states. Report:
+`/private/tmp/claude-501/-Users-nhanvu-Documents-code-book-clone/396a1be9-3c31-4139-b9fa-1d9358898140/scratchpad/deck8_report.json`. Screenshots: `/private/tmp/claude-501/-Users-nhanvu-Documents-code-book-clone/396a1be9-3c31-4139-b9fa-1d9358898140/scratchpad/shots_deck8/`.
+
+| Check | Result |
+| --- | --- |
+| Network | 0 requests outside `file:`/`data:` |
+| Console and page errors | None |
+| Text-box overlaps, page scroll, text outside the viewport | None in any of the 56 states |
+| Contrast | Every state is at least 5.26:1 except one (see note 1) |
+
+### Notes for the user (no change requested; the deck is the user's)
+
+1. Slide 7, last build: the faded line `Earlier belief: "Snape wants the Stone."` measures
+   **4.13:1**, under the 4.5:1 guideline. Brighten that grey slightly.
+2. Two template prompts are shortened:
+   - Sprint 2 shows "What was a challenge you faced, or a barrier/dependency?" without
+     "How did you overcome it?";
+   - Sprint 3 drops "during the process".
+
+   The ShiftKey template asks for them word for word.
+3. The smallest text is 11–13 px at 1920×1080. On slide 3 at 1280×720 the graph labels
+   shrink to about 7 px. Check readability on the projector.
+4. Slides 4–8 carry 130–160 words on screen by their last build. That is fine as a
+   backdrop, since the script carries the talk.
+5. Fan art in `doc/presentation/assets/characters/` is already on `origin/main` (PR #1).
+
+### Not measured
+
+Real projector, Safari, live timing of the script.

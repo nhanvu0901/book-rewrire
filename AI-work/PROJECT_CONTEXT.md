@@ -269,8 +269,10 @@ single-character input did not eliminate them. Read handoffs for exact source/ar
   sprints (Slide 2: Sprint 1 World Map, Slide 3: Sprint 2 Trapdoor with tools caption, Slide 4: Sprint 3
   Inventory with two-step strip, Quirrell "Carries a secret", Voldemort twist in Table B text); implemented
   and verified: `done`, awaiting Claude review.
-  T-0011 (remove the unused ScaleDown experiment) is `verified` (2026-10-26). T-0009 (LangSmith env export) is a
-  `draft` awaiting the user's choice. Order and board:
+  T-0011 (remove the unused ScaleDown experiment) is `verified` (2026-10-26). T-0012 (running list
+  quote normalization) is `done` (2026-10-27, branch `ticket/T-0012-quote-normalization`): `validate_running_list`
+  normalizes quote characters and collapses whitespace for comparisons, unblocking Harry Potter chapter 6 ingestion.
+  T-0009 (LangSmith env export) is a `draft` awaiting the user's choice. Order and board:
   [tickets/README.md](tickets/README.md).
 - The working-tree presentation file inspected on 2026-10-26 currently has eight `data-screen`
   sections, with a character selector on slide 2. This differs from the five-slide T-0010

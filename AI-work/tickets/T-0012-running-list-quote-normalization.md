@@ -1,12 +1,12 @@
 ---
 id: T-0012
 title: Running lists treat straight and curly quotes as the same name
-status: done
+status: verified
 owner: Antigravity (Gemini 4 Argon)
 branch: ticket/T-0012-quote-normalization
 priority: high
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 depends_on: []
 ---
 
@@ -144,4 +144,44 @@ No live API calls or Neo4j writes. The user decides when to rerun the real summa
 
 ## Review
 
-_Filled by the product manager: verdict, evidence per criterion, findings with file:line._
+Reviewed by Claude (product manager) on 2026-10-28. Verdict: **verified**.
+
+### Verification rerun by the reviewer (branch `ticket/T-0012-quote-normalization`, `51735c5`)
+
+| Check | Result |
+| --- | --- |
+| `uv run pytest -q` | `314 passed, 4 skipped`. Baseline at `182bf4b` (before the ticket): 309 passed, so +5 new tests |
+| `uv run pytest -q tests/test_chapter_summarization.py` | `56 passed` (baseline 51) |
+| `ruff check src tests` / `ruff format --check src tests` / `mypy src` | All checks passed / 65 files already formatted / no issues in 44 source files |
+| `git diff --check 182bf4b HEAD` | Clean |
+
+### Acceptance criteria
+
+| Criterion | Result |
+| --- | --- |
+| Malkin case, curly before and straight after | pass (`test_where_is_where_accepts_quote_normalized_survival_malkin_case`) |
+| Reverse direction | pass (`..._reverse_case`) |
+| WHO IS WHO with curly apostrophe and curly double quote | pass (`test_who_is_who_accepts_quote_normalized_apostrophe_and_double_quote`) |
+| Returned text keeps the model's characters | pass (`test_running_list_returns_models_original_characters_unmodified`) |
+| A truly missing entry still raises | pass, for places and characters |
+| Existing tests unchanged | pass |
+| Suite, lint, format, types | pass |
+
+The code change is small and matches the requirements: `_name_key`
+(`logic.py:66-67`) maps the listed quote characters, collapses whitespace and casefolds.
+It is used for both the surviving names and the previous names (`logic.py:95-104`). The
+saved text is not changed.
+
+### Notes (no change requested)
+
+- **Branch base.** The branch starts from `clean/ingest-base` (`182bf4b`), not from `main`.
+  Local `main` is still `752e0d2` "first commit", and `origin/main` (`e734ea3`, PR #1)
+  lacks the last three commits on `clean/ingest-base`. The rule "start from an
+  up-to-date `main`" cannot be followed until `main` is brought up to date; the user
+  decides that. This deviation is not mentioned in the Completion report.
+- The Completion report runs ruff on `AI-work/skills/run-ingest-api-audit` too, which is
+  why it reports 71 files; the reviewer's command covers `src tests` (65 files).
+- T-0013 later removes the validator that this ticket fixed, together with its five new
+  tests. See the T-0013 review.
+- The open question about `identity.py` (`appears_in_source`) is still open. No live run
+  was made.

@@ -64,18 +64,52 @@ def test_one_location_call_per_chapter_assigns_ids_reuses_existing_and_saves_fil
     summaries = ScriptedLLM(
         [
             "SUMMARY_CH1",
-            "Mara | - | traveler",
-            "the old house | - | WHERE_CH1\nthe spare room | - | upstairs room in the old house",
+            {"add": [{"name": "Mara", "other_names": [], "card": "traveler"}], "update": []},
+            {
+                "add": [
+                    {"name": "the old house", "other_names": [], "card": "WHERE_CH1"},
+                    {
+                        "name": "the spare room",
+                        "other_names": [],
+                        "card": "upstairs room in the old house",
+                    },
+                ],
+                "update": [],
+            },
             "SUMMARY_CH2",
-            "Mara | - | traveler",
-            "Oak Manor | the old house | WHERE_CH2\n"
-            "the spare room | - | upstairs room in Oak Manor\n"
-            "wardrobe hall | - | hall in Oak Manor",
+            {"add": [], "update": []},
+            {
+                "add": [
+                    {"name": "wardrobe hall", "other_names": [], "card": "hall in Oak Manor"},
+                ],
+                "update": [
+                    {
+                        "id": "P001",
+                        "name": "Oak Manor",
+                        "other_names": ["the old house"],
+                        "card": "WHERE_CH2",
+                    },
+                    {
+                        "id": "P002",
+                        "name": "the spare room",
+                        "other_names": [],
+                        "card": "upstairs room in Oak Manor",
+                    },
+                ],
+            },
             "SUMMARY_CH3",
-            "Mara | - | traveler",
-            "Oak Manor | the old house | WHERE_CH3\n"
-            "the spare room | - | upstairs room in Oak Manor\n"
-            "wardrobe hall | - | hall in Oak Manor",
+            {"add": [], "update": []},
+            {
+                "add": [],
+                "update": [
+                    {
+                        "id": "P001",
+                        "name": "Oak Manor",
+                        "other_names": ["the old house"],
+                        "card": "WHERE_CH3",
+                    },
+                ],
+            },
             "CORE_MEMORY",
         ]
     )

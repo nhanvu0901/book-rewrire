@@ -27,12 +27,12 @@ pov ingest <book_id> --no-neo4j
 ```
 
 - Source validation compares chapter order, file set, paragraph IDs/order, and text with `book.json`.
-- Summary graph: `initialize -> summarize_chapter -> validate_summary -> save_summary -> summarize_book`,
+- Summary graph: `initialize -> summarize_chapter -> update_who_is_who -> update_where_is_where -> validate_summary -> save_summary -> summarize_book`,
   looping across chapters before running `summarize_book` once after the last chapter.
 - Character/extraction graph:
   `initialize -> extract_characters -> validate_characters -> extract_relationships -> validate_relationships -> extract_locations -> validate_locations -> extract_scenes -> validate_scenes -> save_json`,
   looping across chapters. Recursion limits use per-graph helpers `summarize_chapter_recursion_limit`
-  (`SUMMARY_NODES_PER_CHAPTER = 3`) and `extract_character_recursion_limit`
+  (`SUMMARY_NODES_PER_CHAPTER = 5`) and `extract_character_recursion_limit`
   (`EXTRACT_NODES_PER_CHAPTER = 9`) shared by `pipeline.py` and the audit runner.
 - `--neo4j` is the default. `--no-neo4j` (user decision: Neo4j is not needed while testing LLM
   output) still saves summaries, proposals, snapshots and `characters.json`. Added 2026-10-24,
@@ -88,30 +88,26 @@ pov ingest <book_id> --no-neo4j
   record is created for any group (even a specific one like `"the three guards"`) unless an
   individual is singled out. Not yet verified live after `T-0003`.
 - Per-chapter summary calls (`T-0001` verified 2026-10-24; Call 2 card rules updated in `T-0002`;
-  Call 3 `WHERE IS WHERE` added in `T-0006`):
+  Call 3 `WHERE IS WHERE` added in `T-0006`; changes-only lists and upsert reducer in `T-0013` verified 2026-10-28):
   1. Call 1 (`summarize_chapter/prompt/summarize_chapter.py`): writes plain-text `chapter_summary`
      for the current chapter in its own words (no copied sentences or dialogue), given book title,
-     chapter ID, `format_previous_context`, and current chapter text.
-  2. Call 2 (`summarize_chapter/prompt/update_who_is_who.py`): updates the complete `WHO IS WHO`
-     list (`name | comma-separated other names or titles used in the text, or - | identity card`,
-     at most 40 words per card describing who the character is as of the end of the current chapter
-     plus story status and cause, no chapter/presence references or event lists, no groups unless an
-     individual is singled out, no unattributed guessed outcomes or intensified wording, keep earlier
-     characters, only names in the inputs, no outside knowledge, explicit family relations only)
-     from the previous `WHO IS WHO` (empty for u01) and current chapter text plus
-     `UPDATE_WHO_IS_WHO_REMINDER`. It receives no chapter summaries or call-1 output.
-  3. Call 3 (`summarize_chapter/prompt/update_where_is_where.py`): updates the complete
-     `WHERE IS WHERE` list (`name | comma-separated other names used in the text, or - | place card`,
-     at most 30 words per card describing what kind of place it is, where it lies or what larger
-     place it is part of by name, who owns/rules/lives there, and its lasting state, with no chapter
-     references or event lists, named places and unnamed action settings under clearest description,
-     no objects/people, keep earlier places, merge only when explicit, no outside knowledge) from the
-     previous `WHERE IS WHERE` (empty for u01) and current chapter text plus
-     `UPDATE_WHERE_IS_WHERE_REMINDER`. It receives no chapter summaries, `WHO IS WHO`, or call-1 output.
-     Both Call 2 and Call 3 share `validate_running_list` (nonblank output, 3 non-empty `|`-separated
-     fields per line ignoring optional header line, case-insensitive whole-name survival of every
-     previous first-field name in field 1 or comma-separated field 2 on some new line), retrying up
-     to 2 extra times with `Rejected: <reason>` appended before raising `LLMError`.
+     chapter ID, `format_previous_context` (prior chapter summaries, plus `WHO IS WHO` and
+     `WHERE IS WHERE` rendered without IDs), and current chapter text.
+  2. Call 2 (`summarize_chapter/prompt/update_who_is_who.py`): returns JSON `CardChanges`
+     (`add` and `update` lists). Receives current chapter text and previous list with stable IDs
+     (`C001 | name | other names | card`). Python assigns sequential IDs (`C001`, `C002`, ...)
+     continuing from the highest existing ID. Rejects unknown update IDs, duplicate update IDs,
+     and duplicate-name adds (quote-normalized via `name_key` from `T-0012`). Reducer
+     `upsert_cards(current, update) -> {**current, **update}` merges into `who_cards`.
+  3. Call 3 (`summarize_chapter/prompt/update_where_is_where.py`): returns JSON `CardChanges`
+     (`add` and `update` lists). Receives current chapter text and previous list with stable IDs
+     (`P001 | name | other names | card`). Python assigns sequential IDs (`P001`, `P002`, ...).
+     Same validation rules and reducer merging into `where_cards`.
+  4. Call 4 (`validate_summary`): constructs `ChapterSummary` by rendering `who_cards` and
+     `where_cards` without IDs (`render_cards(..., with_ids=False)`), preserving downstream compatibility
+     with extraction graphs and Neo4j storage.
+  5. Call 5 (`save_summary`): atomically saves `summaries/uNN.summary.json` and appends `summaries`.
+     Retries up to 2 extra times with `Rejected: <reason>` before raising `LLMError`.
      The Call 3 and structured-location prompts use generic place/object examples; regression tests
      reject the cited test-book names and place/object terms, including `wardrobe`, `lamp`,
      `spare room`, `hilltop`, `Stone Table`, `pavilion`, `Professor`, `Cair`, and `Paravel`.

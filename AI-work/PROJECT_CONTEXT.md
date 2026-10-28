@@ -289,7 +289,8 @@ single-character input did not eliminate them. Read handoffs for exact source/ar
   spacing keeps the content of slides 4–7 (including the Chapter 17 timeline state) and the
   slide-8 replay bar above navigation; the
   pipeline displays five steps in one row. Headless checks exercised the then-existing graph
-  label toggle and replay, pipeline simulation, timeline toggle, notes, and replaying a selected POV.
+  label toggle and replay, the then-existing pipeline simulation, timeline toggle, notes, and
+  replaying a selected POV.
 - A subsequent presentation polish pass on 2026-10-26 changed the eight-slide deck's visible
   copy and speaker notes to plainer English and softened its palette, type, panels, and glow.
   The slide sequence, story facts, metrics, and interactive JavaScript were retained. All eight
@@ -305,10 +306,33 @@ single-character input did not eliminate them. Read handoffs for exact source/ar
   Sprint 2 and Sprint 3 copy/notes use plain English and a concrete before/after Harry example.
   The pipeline trace is explicitly an illustrative example; the knowledge timeline is labeled
   as a design. The existing numeric metrics were retained without a new factual audit.
-  Headless Chrome checks verified all four graph states, forward/back navigation, the pipeline
-  demo, and absence of runtime errors. Slides 3–7 were rendered at 1280×720 and 1920×1080;
+  A later direct request extended manual reveals to Sprint 2 and Sprint 3 (screens 4–7).
+  Sprint 2 now uses a document-style problem card and a connected five-step workflow with
+  trace/results arranged below. Current copy and numeric metrics are retained. Reveal counts
+  are 7, 7, 4, and 3 respectively; the pipeline's automatic demo button/timers were removed.
+  The First Approach card has three manual stages (prompt title, chapter input/diagram,
+  requested tasks), followed by three faults and its takeaway. The diagram draws a document,
+  arrow, and output when revealed; its motion is disabled under reduced-motion preferences.
+  Next/Space/ArrowRight reveal one group, Prev/ArrowLeft reverse one group, and returning
+  from the next slide restores the previous slide's final build. The footer shows build progress.
+  Screen 7 advances from story facts to Harry's Chapter 16 view, then Chapter 17; its chapter
+  buttons stay synchronized with the build state. Hidden groups reserve layout space and are
+  inert; reveal motion respects reduced-motion preferences.
+  Headless Chrome checks verified every Sprint 2/3 build, forward/back navigation, chapter
+  selection, no automatic progression, Space navigation, and absence of runtime errors.
+  Slides 4–7 were rendered in initial/final states at 1280×720 and 1920×1080; visible content
+  remained above the footer. Sprint 2 layouts were visually inspected at both sizes.
+  Earlier, slides 3–7 were rendered at 1280×720 and 1920×1080;
   the revised Sprint 2/3 slides were visually inspected at 1280×720. This context update was
   performed directly because the requested `gpt-5.6-sol` model was unavailable.
+- The current English rehearsal script is
+  [presentation-script-5min.md](../doc/presentation/presentation-script-5min.md): 504 spoken
+  words, an eight-slide schedule totaling 300 seconds, and cues matching each manual reveal.
+  The same script is embedded in the HTML speaker notes, opened with N; line breaks preserve
+  the cues. Timing is a rehearsal target, not a measured human delivery. No provenance was
+  established for the existing percentage badges, so the script does not narrate those figures.
+  Browser checks verified all seven First Approach stages, Next/Prev, timed notes for all
+  slides, 720p layout, and disabled diagram animation with reduced motion.
 - For a requested real API audit, load [run-ingest-api-audit](skills/run-ingest-api-audit/SKILL.md).
   The initiating model owns the run, analysis, and suggested fixes. Terra observes and escalates.
 - The skill-local runner calls current production graphs, captures HTTP responses before client

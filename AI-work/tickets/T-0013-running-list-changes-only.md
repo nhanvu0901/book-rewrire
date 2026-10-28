@@ -1,7 +1,7 @@
 ---
 id: T-0013
 title: WHO IS WHO and WHERE IS WHERE return changes only, merged by a reducer
-status: done
+status: changes_requested
 owner: Antigravity (Gemini 4 Argon)
 branch: ticket/T-0013-changes-only-lists
 priority: medium
@@ -187,4 +187,90 @@ None. Ready for Claude product manager review.
 
 ## Review
 
-_Filled by the product manager: verdict, evidence per criterion, findings with file:line._
+Reviewed by Claude (product manager) on 2026-10-28. Verdict: **changes_requested**.
+
+The design is implemented as asked:
+- `Card`, `CardChanges` and the `upsert_cards` reducer;
+- IDs assigned by Python, and `check_changes` with the T-0012 name key;
+- the summary text stays a plain list;
+- saved files keep the `name | other names | card` lines.
+
+The criteria tests pass. Four findings remain: one in the prompts, two in cleanup and test
+coverage, and one gap in the Completion report.
+
+### Verification rerun by the reviewer (branch `ticket/T-0013-changes-only-lists`, `714415a`)
+
+| Check | Result |
+| --- | --- |
+| `uv run pytest -q` | `293 passed, 4 skipped`. Before the ticket (`51735c5`): 314 passed. 15 tests were removed and 10 added; see F3 |
+| `ruff check src tests` / `ruff format --check src tests` / `mypy src` | All checks passed / 65 files already formatted / no issues in 44 source files |
+| `git diff --check 51735c5 714415a` | Clean |
+
+### Acceptance criteria
+
+| Criterion | Result |
+| --- | --- |
+| 3 chapters, `summaries` once each in order | pass |
+| An update-only chapter keeps earlier cards | pass (`test_fake_chapter_update_only_preserves_earlier_cards`) |
+| Unknown IDs and duplicate-name adds retry, then raise | pass (4 tests, including the quote-normalized duplicate) |
+| Stable IDs, sequence continues | pass (`test_ids_are_stable_across_chapters_and_continue_sequence`) |
+| Saved files keep the text format; extract tests unchanged in behavior | pass. Extract test fixtures changed only their fake summary client |
+| Suite, lint, format, types | pass |
+
+### Findings
+
+**F1 (required): the prompts still ask for text lines, then for JSON.**
+`prompt/update_who_is_who.py:16-18` still says "Return one line per individual
+character ... always with exactly three fields separated by \" | \": <name> | ... |
+<identity card>". `prompt/update_where_is_where.py:13-15` says the same for places. The new
+`OUTPUT` block then asks for JSON. A real model may follow either instruction. Rewrite
+that paragraph to describe the three JSON fields (`name`, `other_names`, `card`) and keep
+the word limits and card rules. Add a prompt test: the prompts no longer contain
+`exactly three fields separated by` and do contain `"add"` and `"update"`.
+
+**F2 (required): remove the dead code from the old full-list path.** The following are no
+longer used by the pipeline:
+- `validate_running_list`, `validate_who_is_who`, `validate_where_is_where` and
+  `_running_list_lines` (`logic.py:131-186`);
+- the `_name_key` alias (`logic.py:62-63`);
+- `SummarizeChapterResponse` (`model.py:39`) and the `proposed` state key (`model.py:69`);
+- `UPDATE_WHO_IS_WHO_REMINDER = ""` and `UPDATE_WHERE_IS_WHERE_REMINDER = ""`.
+
+`test_legacy_validators_compatibility` (`tests/test_chapter_summarization.py:566`) only
+keeps the old validators alive. Remove the code and that test, as T-0011 did for ScaleDown.
+A search for these names in `src` and `tests` must come back empty.
+
+**F3 (required): restore the coverage for failures mid-run.** These tests were removed
+without a replacement on the new path:
+- `test_three_invalid_who_is_who_answers_raise_and_preserve_saved_chapters`
+- `test_three_invalid_where_is_where_answers_raise_and_preserve_saved_chapters`
+- `test_empty_summary_stops_without_losing_previous_saved_chapter`
+
+Add graph-level tests: chapter 2's WHO update (and, separately, its WHERE update) fails
+`1 + MAX_RETRIES` times, the run raises `LLMError`, and `u01.summary.json` is still on
+disk. Do the same for an empty chapter summary. The T-0012 quote tests were removed with
+the old validator, which is acceptable once F2 is done. The quote case is now covered by
+`test_quote_normalized_duplicate_name_add_retries_and_recovers`.
+
+**F4 (required): the Completion report must state its deviations.** It says "Deviations:
+None", but:
+- the test count fell from 314 to 293;
+- the ticket was still `draft`, with four open questions, when the work started. The
+  defaults were used: sequential nodes, no `merge`, no IDs in saved files, and the
+  existing `complete_json` on the summary client;
+- `scratch/changes_only_lists.py` and `scratch/reducer_playground.py` were committed in
+  `714415a`. They are the user's learning files, not ticket work.
+
+Record these in the report. Ask the user whether the scratch files stay in this branch.
+
+### Notes (no change requested)
+
+- **Unmeasured live risk.** The summary client sends `complete_json` with
+  `response_format: {"type": "json_object"}` and without a pinned provider or structured
+  outputs. Nobody has checked yet whether `OPENROUTER_SUMMARIZE_CHAPTER_MODEL` supports
+  that on its OpenRouter provider. A short live run needs the user's OK.
+- `check_changes` does not stop an `update` from renaming a card to a name that another
+  card already uses. This is a rare case and can be handled later.
+- State now keeps both `who_cards` and the rendered `who_is_who` text. This works, but the
+  text could be rendered from the cards in `summarize_book` alone.
+- The branch is stacked on `ticket/T-0012-quote-normalization`, which fits `depends_on`.

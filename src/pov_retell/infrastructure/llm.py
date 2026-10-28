@@ -1,10 +1,19 @@
 """OpenRouter requests for JSON extraction and plain-text summarization."""
 
+import random
+import time
 from collections.abc import Callable
 from typing import Any, Protocol, TypeVar
 
 from langsmith.wrappers import wrap_openai
-from openai import OpenAI, OpenAIError
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    OpenAI,
+    OpenAIError,
+    RateLimitError,
+)
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, ValidationError
 
@@ -13,10 +22,30 @@ from pov_retell.config import ReasoningMode, Settings
 T = TypeVar("T", bound=BaseModel)
 
 MAX_RETRIES = 2  # extra attempts after the first answer
+TRANSIENT_RETRIES = 5  # extra attempts after an overloaded or unreachable provider
+BACKOFF_BASE_SECONDS = 2.0
+BACKOFF_MAX_SECONDS = 60.0
+TRANSIENT_CODES = {408, 429, 500, 502, 503, 504}
+TRANSIENT_WORDS = ("overloaded", "rate limit", "temporarily", "timeout", "unavailable")
 
 
 class LLMError(RuntimeError):
     """The LLM call failed or kept returning unusable answers."""
+
+
+class TransientLLMError(LLMError):
+    """The provider is busy or unreachable; the same request may work later."""
+
+
+def is_transient(code: object, message: str) -> bool:
+    if isinstance(code, int) and code in TRANSIENT_CODES:
+        return True
+    return any(word in message.casefold() for word in TRANSIENT_WORDS)
+
+
+def backoff_delay(attempt: int) -> float:
+    """Exponential backoff with full jitter: 0-2 s, 0-4 s, 0-8 s, ... capped at 60 s."""
+    return random.uniform(0, min(BACKOFF_MAX_SECONDS, BACKOFF_BASE_SECONDS * 2**attempt))
 
 
 def _enforce_strict_objects(node: Any) -> None:
@@ -81,6 +110,8 @@ class OpenRouterClient:
         allow_fallbacks: bool = True,
         reasoning: ReasoningMode = "none",
         structured_outputs: bool = False,
+        transient_retries: int = TRANSIENT_RETRIES,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         settings = settings or Settings()  # type: ignore[call-arg]  # required fields come from .env
         self.model = settings.OPENROUTER_MODEL if model is None else model
@@ -90,6 +121,8 @@ class OpenRouterClient:
         self.allow_fallbacks = allow_fallbacks
         self.reasoning: ReasoningMode = reasoning
         self.structured_outputs = structured_outputs
+        self.transient_retries = transient_retries
+        self._sleep = sleep
         if client is None:
             key = settings.OPENROUTER_API_KEY.get_secret_value()
             if not key:
@@ -183,6 +216,28 @@ class OpenRouterClient:
         response_format: dict[str, Any] | None = None,
         extra_body: dict[str, Any] | None = None,
     ) -> str:
+        for attempt in range(1 + self.transient_retries):
+            try:
+                return self._ask_once(
+                    messages,
+                    json_mode=json_mode,
+                    response_format=response_format,
+                    extra_body=extra_body,
+                )
+            except TransientLLMError:
+                if attempt == self.transient_retries:
+                    raise
+                self._sleep(backoff_delay(attempt))
+        raise AssertionError("unreachable")
+
+    def _ask_once(
+        self,
+        messages: list[ChatCompletionMessageParam],
+        *,
+        json_mode: bool = True,
+        response_format: dict[str, Any] | None = None,
+        extra_body: dict[str, Any] | None = None,
+    ) -> str:
         try:
             if json_mode:
                 fmt: Any = response_format or {"type": "json_object"}
@@ -216,11 +271,16 @@ class OpenRouterClient:
                     messages=messages,
                     max_tokens=self.max_tokens,
                 )
+        except (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError) as exc:
+            raise TransientLLMError(f"OpenRouter request failed: {exc}") from exc
         except OpenAIError as exc:
             raise LLMError(f"OpenRouter request failed: {exc}") from exc
         if not response.choices:
             error = getattr(response, "error", None)
             message = error.get("message") if isinstance(error, dict) else "no choices returned"
+            code = error.get("code") if isinstance(error, dict) else None
+            if is_transient(code, str(message)):
+                raise TransientLLMError(f"OpenRouter request failed: {message}")
             raise LLMError(f"OpenRouter request failed: {message}")
         choice = response.choices[0]
         choice_error = getattr(choice, "error", None)
@@ -231,6 +291,9 @@ class OpenRouterClient:
                 or _extract_error_message(getattr(response, "error", None))
                 or "provider returned finish_reason=error"
             )
+            code = choice_error.get("code") if isinstance(choice_error, dict) else None
+            if is_transient(code, detail):
+                raise TransientLLMError(f"OpenRouter generation failed: {detail}")
             raise LLMError(f"OpenRouter generation failed: {detail}")
         if finish_reason == "length":
             raise LLMError(

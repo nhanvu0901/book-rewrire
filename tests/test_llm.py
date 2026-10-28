@@ -11,7 +11,12 @@ from pydantic import SecretStr
 
 from pov_retell.book.models import MapResponse
 from pov_retell.config import ReasoningMode, Settings
-from pov_retell.infrastructure.llm import LLMError, OpenRouterClient, strict_json_schema
+from pov_retell.infrastructure.llm import (
+    LLMError,
+    OpenRouterClient,
+    TransientLLMError,
+    strict_json_schema,
+)
 from pov_retell.ingest.graph.extract_character.model import ExtractCharacterResponse
 from pov_retell.ingest.graph.extract_character.prompt.extract_character import PROMPT_EXTRACT_CHAR
 
@@ -59,7 +64,8 @@ class FakeOpenAI:
 
 def make(replies: list[str]) -> tuple[OpenRouterClient, FakeOpenAI]:
     fake = FakeOpenAI(replies)
-    return OpenRouterClient(settings(), client=fake), fake  # type: ignore[arg-type]
+    client = OpenRouterClient(settings(), client=fake, sleep=lambda _: None)  # type: ignore[arg-type]
+    return client, fake
 
 
 def test_the_request_asks_for_json() -> None:
@@ -206,7 +212,7 @@ def test_upstream_error_body_is_reported_without_crashing() -> None:
         choices=None,
         error={"code": 503, "message": "Service temporarily overloaded"},
     )
-    client = OpenRouterClient(settings(), client=fake)  # type: ignore[arg-type]
+    client = OpenRouterClient(settings(), client=fake, sleep=lambda _: None)  # type: ignore[arg-type]
     with pytest.raises(LLMError, match="Service temporarily overloaded"):
         client.complete_json("classify", MapResponse)
 
@@ -394,8 +400,8 @@ def test_text_completion_sends_configured_reasoning(
     assert "response_format" not in fake.requests[0]
 
 
-def test_finish_reason_error_raises_llm_error_without_retry_loop() -> None:
-    fake = FakeOpenAI([""])
+def test_finish_reason_error_is_retried_as_transient_then_raised() -> None:
+    fake = FakeOpenAI([""] * 6)
     original = fake.chat.completions.create
 
     def errored(**kwargs: Any) -> Any:
@@ -408,16 +414,16 @@ def test_finish_reason_error_raises_llm_error_without_retry_loop() -> None:
         return response
 
     fake.chat.completions.create = errored
-    client = OpenRouterClient(settings(), client=fake)  # type: ignore[arg-type]
+    client = OpenRouterClient(settings(), client=fake, sleep=lambda _: None)  # type: ignore[arg-type]
     with pytest.raises(
         LLMError, match="OpenRouter generation failed: Upstream idle timeout exceeded"
     ):
         client.complete_json("extract", ExtractCharacterResponse)
-    assert len(fake.requests) == 1
+    assert len(fake.requests) == 6  # 1 + TRANSIENT_RETRIES
 
 
-def test_choice_error_object_without_error_finish_reason_raises_llm_error_immediately() -> None:
-    fake = FakeOpenAI([""])
+def test_choice_error_object_is_retried_as_transient_then_raised() -> None:
+    fake = FakeOpenAI([""] * 6)
     original = fake.chat.completions.create
 
     def errored(**kwargs: Any) -> Any:
@@ -427,9 +433,67 @@ def test_choice_error_object_without_error_finish_reason_raises_llm_error_immedi
         return response
 
     fake.chat.completions.create = errored
-    client = OpenRouterClient(settings(), client=fake)  # type: ignore[arg-type]
+    client = OpenRouterClient(settings(), client=fake, sleep=lambda _: None)  # type: ignore[arg-type]
     with pytest.raises(
         LLMError, match="OpenRouter generation failed: Provider disconnected mid-stream"
     ):
         client.complete_json("extract", ExtractCharacterResponse)
-    assert len(fake.requests) == 1
+    assert len(fake.requests) == 6  # 1 + TRANSIENT_RETRIES
+
+
+def test_overloaded_provider_is_retried_with_backoff_then_succeeds() -> None:
+    fake = FakeOpenAI([GOOD])
+    original = fake.chat.completions.create
+    calls = {"n": 0}
+
+    def flaky(**kwargs: Any) -> Any:
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return SimpleNamespace(
+                choices=None,
+                error={
+                    "code": 503,
+                    "message": "Upstream error from Nvidia: Service temporarily overloaded",
+                },
+            )
+        return original(**kwargs)
+
+    fake.chat.completions.create = flaky
+    waits: list[float] = []
+    client = OpenRouterClient(settings(), client=fake, sleep=waits.append)  # type: ignore[arg-type]
+    assert client.complete_json("classify", MapResponse).items[0].cand_id == "c1"
+    assert calls["n"] == 3 and len(waits) == 2
+    assert 0 <= waits[0] <= 2 and 0 <= waits[1] <= 4
+
+
+def test_transient_errors_stop_after_the_retry_budget() -> None:
+    fake = FakeOpenAI([])
+    fake.chat.completions.create = lambda **_: SimpleNamespace(
+        choices=None, error={"code": 429, "message": "Rate limit exceeded"}
+    )
+    waits: list[float] = []
+    client = OpenRouterClient(  # type: ignore[arg-type]
+        settings(), client=fake, sleep=waits.append, transient_retries=3
+    )
+    with pytest.raises(TransientLLMError, match="Rate limit exceeded"):
+        client.complete_text("summarize", system_prompt="system")
+    assert len(waits) == 3
+
+
+def test_non_transient_error_is_not_retried() -> None:
+    fake = FakeOpenAI([])
+    fake.chat.completions.create = lambda **_: SimpleNamespace(
+        choices=None, error={"code": 400, "message": "Invalid request"}
+    )
+    waits: list[float] = []
+    client = OpenRouterClient(settings(), client=fake, sleep=waits.append)  # type: ignore[arg-type]
+    with pytest.raises(LLMError, match="Invalid request"):
+        client.complete_json("classify", MapResponse)
+    assert waits == []
+
+
+def test_backoff_delay_doubles_and_is_capped() -> None:
+    from pov_retell.infrastructure.llm import backoff_delay
+
+    for attempt, ceiling in ((0, 2), (1, 4), (2, 8), (5, 60), (10, 60)):
+        assert all(0 <= backoff_delay(attempt) <= ceiling for _ in range(50))

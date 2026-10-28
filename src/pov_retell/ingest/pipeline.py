@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from pov_retell.infrastructure.llm import JsonLLM, TextLLM
+from pov_retell.infrastructure.llm import JsonLLM, SummarizeLLM
 from pov_retell.ingest.graph.extract_character import logic
 from pov_retell.ingest.graph.extract_character.graph import (
     build_extract_character_graph,
@@ -26,7 +26,7 @@ def ingest_book(
     character_llm: JsonLLM,
     writer: CharacterWriter | None,
     *,
-    summary_llm: TextLLM,
+    summary_llm: SummarizeLLM,
     extracted_dir: Path,
     ingest_dir: Path,
     run_id: str | None = None,

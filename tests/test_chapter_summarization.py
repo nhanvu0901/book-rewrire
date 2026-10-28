@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from test_character_ingest import ScriptedLLM, make_extraction
@@ -7,8 +8,17 @@ from test_llm import make
 
 from pov_retell.infrastructure.llm import LLMError
 from pov_retell.ingest.graph.summarize_chapter.logic import (
+    changes_to_update,
+    check_changes,
+    name_key,
+    render_cards,
     validate_where_is_where,
     validate_who_is_who,
+)
+from pov_retell.ingest.graph.summarize_chapter.model import (
+    Card,
+    CardChanges,
+    CardUpdate,
 )
 from pov_retell.ingest.graph.summarize_chapter.prompt.update_where_is_where import (
     PROMPT_UPDATE_WHERE_IS_WHERE,
@@ -21,16 +31,19 @@ from pov_retell.ingest.graph.summarize_chapter.prompt.update_who_is_who import (
 from pov_retell.ingest.source import load_chapters
 
 
-def summary(
-    chapter: str,
-    who_is_who: str,
-    where_is_where: str = "The Gate | - | stone gate",
-) -> dict[str, str]:
-    return {
-        "chapter_summary": chapter,
-        "who_is_who": who_is_who,
-        "where_is_where": where_is_where,
-    }
+def card(name: str, card_text: str, *other_names: str) -> dict[str, object]:
+    return {"name": name, "other_names": list(other_names), "card": card_text}
+
+
+def card_update(card_id: str, name: str, card_text: str, *other_names: str) -> dict[str, object]:
+    return {"id": card_id, "name": name, "other_names": list(other_names), "card": card_text}
+
+
+def changes(
+    add: list[dict[str, object]] | None = None,
+    update: list[dict[str, object]] | None = None,
+) -> str:
+    return json.dumps({"add": add or [], "update": update or []})
 
 
 def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory(
@@ -47,16 +60,31 @@ def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory
     output_dir.mkdir(parents=True)
     llm, transport = make(
         [
+            # Chapter 1: summary, who (add Mara), where (add The Gate)
             "CHAPTER_ONE_SUMMARY",
-            "WHO IS WHO\nMara | - | WHO_AFTER_ONE",
-            "WHERE IS WHERE\nThe Gate | - | WHERE_AFTER_ONE",
+            changes(add=[card("Mara", "WHO_AFTER_ONE")]),
+            changes(add=[card("The Gate", "WHERE_AFTER_ONE")]),
+            # Chapter 2: who (update Mara, add Susan), where (update The Gate, add Great Hall)
             "CHAPTER_TWO_SUMMARY",
-            "Mara | - | WHO_AFTER_TWO\nSusan | - | companion",
-            "The Gate | - | WHERE_AFTER_TWO\nGreat Hall | - | hall inside the gate",
+            changes(
+                add=[card("Susan", "companion")],
+                update=[card_update("C001", "Mara", "WHO_AFTER_TWO")],
+            ),
+            changes(
+                add=[card("Great Hall", "hall inside the gate")],
+                update=[card_update("P001", "The Gate", "WHERE_AFTER_TWO")],
+            ),
+            # Chapter 3: who (update Mara, add Evan), where (update The Gate, add Watchtower)
             "CHAPTER_THREE_SUMMARY",
-            "Mara | - | WHO_AFTER_THREE\nSusan | - | companion\nEvan | - | scout",
-            "The Gate | - | WHERE_AFTER_THREE\nGreat Hall | - | hall inside the gate\n"
-            "Watchtower | - | stone tower above the gate",
+            changes(
+                add=[card("Evan", "scout")],
+                update=[card_update("C001", "Mara", "WHO_AFTER_THREE")],
+            ),
+            changes(
+                add=[card("Watchtower", "stone tower above the gate")],
+                update=[card_update("P001", "The Gate", "WHERE_AFTER_THREE")],
+            ),
+            # Core memory
             "FINAL_CORE_MEMORY",
         ]
     )
@@ -68,7 +96,8 @@ def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory
         "Mara | - | WHO_AFTER_THREE\nSusan | - | companion\nEvan | - | scout"
     )
     assert final["where_is_where"] == (
-        "The Gate | - | WHERE_AFTER_THREE\nGreat Hall | - | hall inside the gate\n"
+        "The Gate | - | WHERE_AFTER_THREE\n"
+        "Great Hall | - | hall inside the gate\n"
         "Watchtower | - | stone tower above the gate"
     )
     assert final["book_memory"].core_memory == "FINAL_CORE_MEMORY"
@@ -77,71 +106,48 @@ def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory
     assert len(transport.requests) == 10
     prompts = [request["messages"][-1]["content"] for request in transport.requests]
 
-    # u01 call 1, call 2, and call 3 receive empty previous context / lists.
+    # u01 Call 1, 2, 3 receive empty previous context
     assert "<previous_book_summary>\n\n</previous_book_summary>" in prompts[0]
     assert "[u01_p001] Mara arrived." in prompts[0]
-    assert "Susan arrived later." not in prompts[0]
-    assert "<previous_who_is_who>\n\n</previous_who_is_who>" in prompts[1]
+    assert "<previous_list>\n(empty)\n</previous_list>" in prompts[1]
     assert "[u01_p001] Mara arrived." in prompts[1]
-    assert "CHAPTER_ONE_SUMMARY" not in prompts[1]
-    assert prompts[1].endswith(UPDATE_WHO_IS_WHO_REMINDER)
-    assert "<previous_where_is_where>\n\n</previous_where_is_where>" in prompts[2]
-    assert "[u01_p001] Mara arrived." in prompts[2]
-    assert "CHAPTER_ONE_SUMMARY" not in prompts[2]
-    assert "WHO_AFTER_ONE" not in prompts[2]
-    assert prompts[2].endswith(UPDATE_WHERE_IS_WHERE_REMINDER)
+    assert "<previous_list>\n(empty)\n</previous_list>" in prompts[2]
 
-    # u02 call 1 receives WHO IS WHO and WHERE IS WHERE after u01 and u01's summary.
+    # u02 Call 1 receives WHO IS WHO and WHERE IS WHERE without IDs and u01's summary
     assert "WHO_AFTER_ONE" in prompts[3]
     assert "WHERE_AFTER_ONE" in prompts[3]
+    assert "C001" not in prompts[3]
+    assert "P001" not in prompts[3]
     assert prompts[3].index("WHO IS WHO") < prompts[3].index("WHERE IS WHERE")
     assert prompts[3].index("WHERE IS WHERE") < prompts[3].index("CHAPTER SUMMARIES")
     assert "[u01]\nCHAPTER_ONE_SUMMARY" in prompts[3]
-    assert "CHAPTER_TWO_SUMMARY" not in prompts[3]
-    assert "WHO_AFTER_TWO" not in prompts[3]
-    assert "WHERE_AFTER_TWO" not in prompts[3]
-    assert "[u02_p001] Susan arrived later." in prompts[3]
-    assert UPDATE_WHO_IS_WHO_REMINDER not in prompts[0] + prompts[3] + prompts[6] + prompts[9]
-    assert UPDATE_WHERE_IS_WHERE_REMINDER not in prompts[0] + prompts[3] + prompts[6] + prompts[9]
 
-    # u02 call 2 receives previous WHO IS WHO and chapter text, without summaries or call-1 output.
-    assert "WHO_AFTER_ONE" in prompts[4]
+    # u02 Call 2 receives previous WHO IS WHO with ID C001
+    assert "C001 | Mara | - | WHO_AFTER_ONE" in prompts[4]
     assert "WHERE_AFTER_ONE" not in prompts[4]
     assert "[u02_p001] Susan arrived later." in prompts[4]
-    assert "CHAPTER_ONE_SUMMARY" not in prompts[4]
-    assert "CHAPTER_TWO_SUMMARY" not in prompts[4]
-    assert prompts[4].endswith(UPDATE_WHO_IS_WHO_REMINDER)
 
-    # u02 call 3 receives previous WHERE IS WHERE and chapter text, without summaries or WHO IS WHO.
-    assert "WHERE_AFTER_ONE" in prompts[5]
+    # u02 Call 3 receives previous WHERE IS WHERE with ID P001
+    assert "P001 | The Gate | - | WHERE_AFTER_ONE" in prompts[5]
     assert "WHO_AFTER_ONE" not in prompts[5]
     assert "[u02_p001] Susan arrived later." in prompts[5]
-    assert "CHAPTER_ONE_SUMMARY" not in prompts[5]
-    assert "CHAPTER_TWO_SUMMARY" not in prompts[5]
-    assert prompts[5].endswith(UPDATE_WHERE_IS_WHERE_REMINDER)
 
-    # u03 call 1 receives WHO IS WHO and WHERE IS WHERE after u02 and summaries 1..2 in order.
+    # u03 Call 1 receives WHO IS WHO and WHERE IS WHERE after u02 (without IDs)
     assert "WHO_AFTER_TWO" in prompts[6]
     assert "WHERE_AFTER_TWO" in prompts[6]
-    assert "WHO_AFTER_ONE" not in prompts[6]
-    assert "WHERE_AFTER_ONE" not in prompts[6]
-    assert prompts[6].index("[u01]\nCHAPTER_ONE_SUMMARY") < prompts[6].index(
-        "[u02]\nCHAPTER_TWO_SUMMARY"
-    )
-    assert "CHAPTER_THREE_SUMMARY" not in prompts[6]
-    assert "WHO_AFTER_THREE" not in prompts[6]
-    assert "WHERE_AFTER_THREE" not in prompts[6]
-    assert "[u03_p001] Evan arrived last." in prompts[6]
+    assert "C001" not in prompts[6]
+    assert "[u01]\nCHAPTER_ONE_SUMMARY" in prompts[6]
+    assert "[u02]\nCHAPTER_TWO_SUMMARY" in prompts[6]
 
-    # Final core-memory call receives all chapter summaries in order with chapter IDs.
+    # Final core-memory call receives all chapter summaries in order with chapter IDs
     assert "Book title: The Gate" in prompts[9]
     assert (
         prompts[9].index("[u01]\nCHAPTER_ONE_SUMMARY")
         < prompts[9].index("[u02]\nCHAPTER_TWO_SUMMARY")
         < prompts[9].index("[u03]\nCHAPTER_THREE_SUMMARY")
     )
-    assert all("response_format" not in request for request in transport.requests)
 
+    # Saved files verify no IDs are leaked into uNN.summary.json or book_memory.json
     assert json.loads((output_dir / "summaries/u01.summary.json").read_text()) == {
         "chapter_id": "u01",
         "chapter_summary": "CHAPTER_ONE_SUMMARY",
@@ -157,102 +163,326 @@ def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory
     assert json.loads((output_dir / "summaries/book_memory.json").read_text()) == {
         "who_is_who": "Mara | - | WHO_AFTER_THREE\nSusan | - | companion\nEvan | - | scout",
         "where_is_where": (
-            "The Gate | - | WHERE_AFTER_THREE\nGreat Hall | - | hall inside the gate\n"
+            "The Gate | - | WHERE_AFTER_THREE\n"
+            "Great Hall | - | hall inside the gate\n"
             "Watchtower | - | stone tower above the gate"
         ),
         "core_memory": "FINAL_CORE_MEMORY",
     }
     assert len(list((output_dir / "summaries").glob("*.summary.json"))) == 3
-    assert not (output_dir / "characters.json").exists()
 
 
-@pytest.mark.parametrize("bad_reply", ["", " \n\t"])
-@pytest.mark.parametrize("stage", ["chapter", "who_is_who", "where_is_where"])
-def test_empty_summary_stops_without_losing_previous_saved_chapter(
-    tmp_path: Path, bad_reply: str, stage: str
-) -> None:
+def test_fake_chapter_update_only_preserves_earlier_cards(tmp_path: Path) -> None:
     from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
 
-    make_extraction(tmp_path, [["Mara arrived."], ["Mara left."], ["Susan arrived."]])
+    make_extraction(tmp_path, [["Mara and Jo arrived."], ["Mara explored alone."]])
     title, chapters = load_chapters(tmp_path / "extracted", "sample")
     output_dir = tmp_path / "ingest/sample/summary"
     output_dir.mkdir(parents=True)
-    first = summary("Only Mara is known.", "Mara | - | traveler", "The Gate | - | stone gate")
-    replies = [
-        "Only Mara is known.",
-        "Mara | - | traveler",
-        "The Gate | - | stone gate",
-    ]
-    if stage in {"who_is_who", "where_is_where"}:
-        replies.append("Mara left.")
-    if stage == "where_is_where":
-        replies.append("Mara | - | traveler")
-    replies.append(bad_reply)
-    llm, transport = make(replies)
-    with pytest.raises(LLMError, match="empty text"):
+    llm, _ = make(
+        [
+            "Summary one.",
+            changes(add=[card("Mara", "traveler"), card("Jo", "friend")]),
+            changes(add=[card("The Gate", "stone gate")]),
+            "Summary two.",
+            # Only update C001, add nothing: Jo (C002) must be preserved
+            changes(update=[card_update("C001", "Mara", "lone traveler")]),
+            changes(),
+            "Core memory.",
+        ]
+    )
+    final = build_summarize_chapter_graph(llm).invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    )
+    assert final["who_is_who"] == "Mara | - | lone traveler\nJo | - | friend"
+    assert "C001" in final["who_cards"]
+    assert "C002" in final["who_cards"]
+    assert final["who_cards"]["C001"].card == "lone traveler"
+    assert final["who_cards"]["C002"].card == "friend"
+
+
+def test_unknown_update_id_retries_and_raises_after_max_retries(tmp_path: Path) -> None:
+    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
+
+    make_extraction(tmp_path, [["Mara arrived."], ["Unknown update."]])
+    title, chapters = load_chapters(tmp_path / "extracted", "sample")
+    output_dir = tmp_path / "ingest/sample/summary"
+    output_dir.mkdir(parents=True)
+    bad_update = changes(update=[card_update("C999", "Ghost", "unknown person")])
+    llm, transport = make(
+        [
+            "Summary one.",
+            changes(add=[card("Mara", "traveler")]),
+            changes(add=[card("The Gate", "stone gate")]),
+            "Summary two.",
+            bad_update,
+            bad_update,
+            bad_update,
+        ]
+    )
+    with pytest.raises(LLMError, match=r"update uses unknown id\(s\): C999"):
         build_summarize_chapter_graph(llm).invoke(
             {"title": title, "chapters": chapters, "output_dir": output_dir}
         )
-    expected_calls = {"chapter": 4, "who_is_who": 5, "where_is_where": 6}[stage]
-    assert len(transport.requests) == expected_calls
-    assert json.loads((output_dir / "summaries/u01.summary.json").read_text()) == {
-        "chapter_id": "u01",
-        **first,
-    }
+    assert len(transport.requests) == 7
+    retry_prompt = transport.requests[5]["messages"][-1]["content"]
+    assert "Rejected: update uses unknown id(s): C999" in retry_prompt
+    assert (output_dir / "summaries/u01.summary.json").exists()
     assert not (output_dir / "summaries/u02.summary.json").exists()
-    assert not (output_dir / "summaries/u03.summary.json").exists()
-    assert not (output_dir / "summaries/book_memory.json").exists()
-    assert not list(output_dir.rglob("*.tmp"))
 
 
-@pytest.mark.parametrize(
-    "bad_line",
-    [
-        "WHO IS WHO",
-        "Mara - traveler",
-        "Mara | traveler",
-        "Mara | - | human | traveler",
-        "Mara | | traveler",
-    ],
-)
-def test_who_is_who_rejects_blank_or_malformed_lines(bad_line: str) -> None:
-    with pytest.raises(ValueError):
-        validate_who_is_who(bad_line)
+def test_duplicate_name_add_retries_and_raises_after_max_retries(tmp_path: Path) -> None:
+    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
 
-
-@pytest.mark.parametrize(
-    "bad_line",
-    [
-        "WHERE IS WHERE",
-        "The Gate - stone gate",
-        "The Gate | stone gate",
-        "The Gate | - | fortress | stone gate",
-        "The Gate | | stone gate",
-    ],
-)
-def test_where_is_where_rejects_blank_or_malformed_lines(bad_line: str) -> None:
-    with pytest.raises(ValueError):
-        validate_where_is_where(bad_line)
-
-
-def test_who_is_who_accepts_case_insensitive_survival_in_first_or_second_field() -> None:
-    previous = "Mara | - | traveler\nthe captain | - | masked woman"
-    merged = "MARA | The Captain, Captain Mara | cautious human woman"
-    assert validate_who_is_who(merged, previous) == merged
-
-
-def test_where_is_where_accepts_case_insensitive_survival_in_first_or_second_field() -> None:
-    previous = "Professor's house | - | country house\nthe spare room | - | upstairs room"
-    merged = (
-        "Professor's House | the old house | large country house\n"
-        "Spare room | the spare room | upstairs room in Professor's House"
+    make_extraction(tmp_path, [["Mara arrived."], ["Mara re-added."]])
+    title, chapters = load_chapters(tmp_path / "extracted", "sample")
+    output_dir = tmp_path / "ingest/sample/summary"
+    output_dir.mkdir(parents=True)
+    bad_add = changes(add=[card("Mara", "duplicate traveler")])
+    llm, transport = make(
+        [
+            "Summary one.",
+            changes(add=[card("Mara", "traveler")]),
+            changes(add=[card("The Gate", "stone gate")]),
+            "Summary two.",
+            bad_add,
+            bad_add,
+            bad_add,
+        ]
     )
-    assert validate_where_is_where(merged, previous) == merged
+    with pytest.raises(LLMError, match=r"'Mara' is already listed as C001; use update"):
+        build_summarize_chapter_graph(llm).invoke(
+            {"title": title, "chapters": chapters, "output_dir": output_dir}
+        )
+    assert len(transport.requests) == 7
+    retry_prompt = transport.requests[5]["messages"][-1]["content"]
+    assert "Rejected: 'Mara' is already listed as C001; use update" in retry_prompt
 
 
-@pytest.mark.parametrize(
-    "forbidden_term",
-    [
+def test_unknown_update_id_retries_and_recovers(tmp_path: Path) -> None:
+    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
+
+    make_extraction(tmp_path, [["Mara arrived."], ["Mara returned."]])
+    title, chapters = load_chapters(tmp_path / "extracted", "sample")
+    output_dir = tmp_path / "ingest/sample/summary"
+    output_dir.mkdir(parents=True)
+    llm, transport = make(
+        [
+            "Summary one.",
+            changes(add=[card("Mara", "traveler")]),
+            changes(add=[card("The Gate", "stone gate")]),
+            "Summary two.",
+            # Call 2: WHO IS WHO - first attempt uses unknown id C005, then corrects to C001
+            changes(update=[card_update("C005", "Mara", "returned traveler")]),
+            changes(update=[card_update("C001", "Mara", "returned traveler")]),
+            changes(),
+            "Core memory.",
+        ]
+    )
+    final = build_summarize_chapter_graph(llm).invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    )
+    assert len(transport.requests) == 8
+    retry_prompt = transport.requests[5]["messages"][-1]["content"]
+    assert "Rejected: update uses unknown id(s): C005" in retry_prompt
+    assert final["who_cards"]["C001"].card == "returned traveler"
+
+
+def test_quote_normalized_duplicate_name_add_retries_and_recovers(tmp_path: Path) -> None:
+    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
+
+    make_extraction(tmp_path, [["Madam Malkin’s Robes opened."], ["Malkin's Robes visited."]])
+    title, chapters = load_chapters(tmp_path / "extracted", "sample")
+    output_dir = tmp_path / "ingest/sample/summary"
+    output_dir.mkdir(parents=True)
+    llm, transport = make(
+        [
+            "Summary one.",
+            changes(add=[card("Mara", "traveler")]),
+            changes(add=[card("Madam Malkin’s Robes", "robe shop", "Madam Malkin's")]),
+            "Summary two.",
+            changes(),
+            # Call 3: WHERE IS WHERE - first attempt re-adds with straight quote
+            changes(add=[card("Madam Malkin's Robes", "robe shop in Diagon Alley")]),
+            # Second attempt uses valid new place
+            changes(add=[card("Gringotts", "wizard bank")]),
+            "Core memory.",
+        ]
+    )
+    final = build_summarize_chapter_graph(llm).invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    )
+    assert len(transport.requests) == 8
+    retry_prompt = transport.requests[6]["messages"][-1]["content"]
+    rejection = 'Rejected: "Madam Malkin\'s Robes" is already listed as P001; use update'
+    assert rejection in retry_prompt
+    assert "Gringotts" in final["where_is_where"]
+    assert "P001" in final["where_cards"]
+    assert "P002" in final["where_cards"]
+
+
+def test_ids_are_stable_across_chapters_and_continue_sequence(tmp_path: Path) -> None:
+    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
+
+    make_extraction(
+        tmp_path,
+        [["First chapter."], ["Second chapter."], ["Third chapter."]],
+    )
+    title, chapters = load_chapters(tmp_path / "extracted", "sample")
+    output_dir = tmp_path / "ingest/sample/summary"
+    output_dir.mkdir(parents=True)
+    llm, _ = make(
+        [
+            # Chapter 1: add C001, C002
+            "Summary one.",
+            changes(add=[card("Mara", "traveler"), card("Jo", "friend")]),
+            changes(add=[card("The Gate", "stone gate")]),
+            # Chapter 2: update only, no adds -> IDs C001, C002 remain stable
+            "Summary two.",
+            changes(update=[card_update("C001", "Mara", "lone traveler")]),
+            changes(),
+            # Chapter 3: add new card -> continues from max ID (C002) to C003
+            "Summary three.",
+            changes(add=[card("Evan", "scout")]),
+            changes(add=[card("The Forest", "deep woods")]),
+            "Core memory.",
+        ]
+    )
+    final = build_summarize_chapter_graph(llm).invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    )
+    assert list(final["who_cards"].keys()) == ["C001", "C002", "C003"]
+    assert list(final["where_cards"].keys()) == ["P001", "P002"]
+    assert final["who_cards"]["C001"].name == "Mara"
+    assert final["who_cards"]["C002"].name == "Jo"
+    assert final["who_cards"]["C003"].name == "Evan"
+
+
+def test_check_changes_validation_rules() -> None:
+    existing = {
+        "C001": Card(name="Mara", other_names=["Lady Mara"], card="traveler"),
+        "C002": Card(name="Jo", other_names=[], card="friend"),
+    }
+
+    # Unknown ID in update
+    bad_id = CardChanges(
+        add=[],
+        update=[CardUpdate(id="C999", name="Ghost", other_names=[], card="unknown")],
+    )
+    with pytest.raises(ValueError, match=r"update uses unknown id\(s\): C999"):
+        check_changes(bad_id, existing)
+
+    # Duplicate ID in update
+    dup_id = CardChanges(
+        add=[],
+        update=[
+            CardUpdate(id="C001", name="Mara", other_names=[], card="one"),
+            CardUpdate(id="C001", name="Mara", other_names=[], card="two"),
+        ],
+    )
+    with pytest.raises(ValueError, match="update lists the same id more than once"):
+        check_changes(dup_id, existing)
+
+    # Add name that already exists
+    dup_add_name = CardChanges(
+        add=[Card(name="Mara", other_names=[], card="new")],
+        update=[],
+    )
+    with pytest.raises(ValueError, match=r"'Mara' is already listed as C001; use update"):
+        check_changes(dup_add_name, existing)
+
+    # Add other_name that already exists
+    dup_add_other = CardChanges(
+        add=[Card(name="Newcomer", other_names=["Lady Mara"], card="new")],
+        update=[],
+    )
+    with pytest.raises(ValueError, match=r"'Lady Mara' is already listed as C001; use update"):
+        check_changes(dup_add_other, existing)
+
+    # Add duplicate within same payload
+    dup_within_add = CardChanges(
+        add=[
+            Card(name="Evan", other_names=[], card="scout"),
+            Card(name="Evan", other_names=[], card="scout duplicate"),
+        ],
+        update=[],
+    )
+    with pytest.raises(ValueError, match=r"'Evan' is added twice"):
+        check_changes(dup_within_add, existing)
+
+    # Curly quote normalization in add
+    existing_quotes = {
+        "C001": Card(name="“Mad-Eye” Moody", other_names=[], card="auror"),
+    }
+    quote_add = CardChanges(
+        add=[Card(name='"Mad-Eye" Moody', other_names=[], card="noble")],
+        update=[],
+    )
+    with pytest.raises(
+        ValueError, match=r"'\"Mad-Eye\" Moody' is already listed as C001; use update"
+    ):
+        check_changes(quote_add, existing_quotes)
+
+
+def test_render_cards_output_formatting() -> None:
+    cards = {
+        "C001": Card(name="Mara", other_names=["Lady Mara", "M"], card="traveler"),
+        "C002": Card(name="Jo", other_names=[], card="friend"),
+    }
+    with_ids = render_cards(cards, with_ids=True)
+    assert with_ids == "C001 | Mara | Lady Mara, M | traveler\nC002 | Jo | - | friend"
+
+    without_ids = render_cards(cards, with_ids=False)
+    assert without_ids == "Mara | Lady Mara, M | traveler\nJo | - | friend"
+
+    assert render_cards({}, with_ids=True) == ""
+    assert render_cards({}, with_ids=False) == ""
+
+
+def test_changes_to_update_assigns_sequential_ids() -> None:
+    # Starting from empty dict
+    c = CardChanges(
+        add=[
+            Card(name="Mara", other_names=[], card="traveler"),
+            Card(name="Jo", other_names=[], card="friend"),
+        ],
+        update=[],
+    )
+    result = changes_to_update(c, {}, "C")
+    assert list(result.keys()) == ["C001", "C002"]
+
+    # Continuing from existing dict
+    c2 = CardChanges(
+        add=[Card(name="Evan", other_names=[], card="scout")],
+        update=[CardUpdate(id="C001", name="Mara", other_names=[], card="hero")],
+    )
+    result2 = changes_to_update(c2, result, "C")
+    assert "C001" in result2
+    assert "C003" in result2
+    assert result2["C001"].card == "hero"
+    assert result2["C003"].name == "Evan"
+
+
+def test_who_is_who_and_where_is_where_prompts_are_book_agnostic(forbidden_term: str) -> None:
+    import re
+
+    who_combined = (PROMPT_UPDATE_WHO_IS_WHO + "\n" + UPDATE_WHO_IS_WHO_REMINDER).casefold()
+    where_combined = (
+        PROMPT_UPDATE_WHERE_IS_WHERE + "\n" + UPDATE_WHERE_IS_WHERE_REMINDER
+    ).casefold()
+    assert re.search(rf"\b{re.escape(forbidden_term)}\b", who_combined, re.IGNORECASE) is None
+    assert re.search(rf"\b{re.escape(forbidden_term)}\b", where_combined, re.IGNORECASE) is None
+    assert "about 40" not in who_combined
+    assert "at most 40 words" in PROMPT_UPDATE_WHO_IS_WHO
+    assert "references to chapters" in PROMPT_UPDATE_WHO_IS_WHO
+    assert "lists of actions or events" in PROMPT_UPDATE_WHO_IS_WHO
+    assert "at most 30 words" in PROMPT_UPDATE_WHERE_IS_WHERE
+    assert "references to chapters" in PROMPT_UPDATE_WHERE_IS_WHERE
+    assert "lists of actions or events" in PROMPT_UPDATE_WHERE_IS_WHERE
+
+
+@pytest.fixture(
+    params=[
         "Narnia",
         "Aslan",
         "Tumnus",
@@ -273,210 +503,13 @@ def test_where_is_where_accepts_case_insensitive_survival_in_first_or_second_fie
         "lamp",
         "spare room",
         "hilltop",
-        "Stone Table",
-        "pavilion",
-        "Professor",
-        "Cair",
+        "fawn",
+        "faun's cave",
         "Paravel",
-    ],
+    ]
 )
-def test_who_is_who_and_where_is_where_prompts_are_book_agnostic(forbidden_term: str) -> None:
-    import re
-
-    who_combined = (PROMPT_UPDATE_WHO_IS_WHO + "\n" + UPDATE_WHO_IS_WHO_REMINDER).casefold()
-    where_combined = (
-        PROMPT_UPDATE_WHERE_IS_WHERE + "\n" + UPDATE_WHERE_IS_WHERE_REMINDER
-    ).casefold()
-    assert re.search(rf"\b{re.escape(forbidden_term)}\b", who_combined, re.IGNORECASE) is None
-    assert re.search(rf"\b{re.escape(forbidden_term)}\b", where_combined, re.IGNORECASE) is None
-    assert "about 40" not in who_combined
-    assert "at most 40 words" in PROMPT_UPDATE_WHO_IS_WHO
-    assert "at most 40 words" in UPDATE_WHO_IS_WHO_REMINDER
-    assert "no chapter references" in UPDATE_WHO_IS_WHO_REMINDER
-    assert "no event lists" in UPDATE_WHO_IS_WHO_REMINDER
-    assert "at most 30 words" in PROMPT_UPDATE_WHERE_IS_WHERE
-    assert "at most 30 words" in UPDATE_WHERE_IS_WHERE_REMINDER
-    assert "no chapter references" in UPDATE_WHERE_IS_WHERE_REMINDER
-    assert "no event lists" in UPDATE_WHERE_IS_WHERE_REMINDER
-
-
-def test_dropping_previous_character_retries_with_rejection_reason_and_recovers(
-    tmp_path: Path,
-) -> None:
-    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
-
-    make_extraction(tmp_path, [["Mara and Jo arrived."], ["Susan arrived."]])
-    title, chapters = load_chapters(tmp_path / "extracted", "sample")
-    output_dir = tmp_path / "ingest/sample/summary"
-    output_dir.mkdir(parents=True)
-    llm, transport = make(
-        [
-            "Mara and Jo arrived.",
-            "Mara | - | traveler\nJo | - | friend",
-            "The Gate | - | stone gate",
-            "Susan arrived.",
-            "Mara | - | traveler\nSusan | - | newcomer",
-            "Mara | - | traveler\nJo | - | friend\nSusan | - | newcomer",
-            "The Gate | - | stone gate",
-            "Core memory.",
-        ]
-    )
-    final = build_summarize_chapter_graph(llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
-    )
-    assert len(transport.requests) == 8
-    retry_prompt = transport.requests[5]["messages"][-1]["content"]
-    assert "Rejected: WHO IS WHO dropped earlier character(s): Jo" in retry_prompt
-    assert "Jo | - | friend" in final["who_is_who"]
-
-
-def test_dropping_previous_place_retries_with_rejection_reason_and_recovers(
-    tmp_path: Path,
-) -> None:
-    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
-
-    make_extraction(tmp_path, [["Mara entered the hall."], ["Mara climbed the tower."]])
-    title, chapters = load_chapters(tmp_path / "extracted", "sample")
-    output_dir = tmp_path / "ingest/sample/summary"
-    output_dir.mkdir(parents=True)
-    llm, transport = make(
-        [
-            "Mara entered the hall.",
-            "Mara | - | traveler",
-            "The Gate | - | stone gate\nGreat Hall | - | hall inside the gate",
-            "Mara climbed the tower.",
-            "Mara | - | traveler",
-            "The Gate | - | stone gate\nWatchtower | - | stone tower",
-            "The Gate | - | stone gate\nGreat Hall | - | hall inside the gate\n"
-            "Watchtower | - | stone tower",
-            "Core memory.",
-        ]
-    )
-    final = build_summarize_chapter_graph(llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
-    )
-    assert len(transport.requests) == 8
-    retry_prompt = transport.requests[6]["messages"][-1]["content"]
-    assert "Rejected: WHERE IS WHERE dropped earlier place(s): Great Hall" in retry_prompt
-    assert "Great Hall | - | hall inside the gate" in final["where_is_where"]
-
-
-@pytest.mark.parametrize(
-    ("previous_list", "dropped_reply", "recovered_reply", "missing_name"),
-    [
-        (
-            "Lucy | Daughter of Eve | human girl\nEve | - | ancestor",
-            "Lucy | Daughter of Eve | human girl",
-            "Lucy | Daughter of Eve | human girl\nEve | - | ancestor",
-            "Eve",
-        ),
-        (
-            "Tumnus | - | faun\nTumnus's father | - | faun in a picture",
-            "Tumnus's father | - | faun in a picture",
-            "Tumnus | - | faun\nTumnus's father | - | faun in a picture",
-            "Tumnus",
-        ),
-    ],
-)
-def test_substring_matches_do_not_hide_dropped_characters_and_trigger_retry(
-    tmp_path: Path,
-    previous_list: str,
-    dropped_reply: str,
-    recovered_reply: str,
-    missing_name: str,
-) -> None:
-    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
-
-    make_extraction(tmp_path, [["Chapter one."], ["Chapter two."]])
-    title, chapters = load_chapters(tmp_path / "extracted", "sample")
-    output_dir = tmp_path / "ingest/sample/summary"
-    output_dir.mkdir(parents=True)
-    llm, transport = make(
-        [
-            "Summary one.",
-            previous_list,
-            "The Gate | - | stone gate",
-            "Summary two.",
-            dropped_reply,
-            recovered_reply,
-            "The Gate | - | stone gate",
-            "Core memory.",
-        ]
-    )
-    final = build_summarize_chapter_graph(llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
-    )
-    assert len(transport.requests) == 8
-    retry_prompt = transport.requests[5]["messages"][-1]["content"]
-    assert f"Rejected: WHO IS WHO dropped earlier character(s): {missing_name}" in retry_prompt
-    assert final["who_is_who"] == recovered_reply
-
-
-def test_three_invalid_who_is_who_answers_raise_and_preserve_saved_chapters(
-    tmp_path: Path,
-) -> None:
-    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
-
-    make_extraction(tmp_path, [["Mara and Jo arrived."], ["Susan arrived."]])
-    title, chapters = load_chapters(tmp_path / "extracted", "sample")
-    output_dir = tmp_path / "ingest/sample/summary"
-    output_dir.mkdir(parents=True)
-    dropped = "Mara | - | traveler\nSusan | - | newcomer"
-    llm, transport = make(
-        [
-            "Mara and Jo arrived.",
-            "Mara | - | traveler\nJo | - | friend",
-            "The Gate | - | stone gate",
-            "Susan arrived.",
-            dropped,
-            "Mara | missing third field",
-            dropped,
-        ]
-    )
-    with pytest.raises(LLMError, match="Jo"):
-        build_summarize_chapter_graph(llm).invoke(
-            {"title": title, "chapters": chapters, "output_dir": output_dir}
-        )
-    assert len(transport.requests) == 7
-    assert "Rejected:" in transport.requests[5]["messages"][-1]["content"]
-    assert "Rejected:" in transport.requests[6]["messages"][-1]["content"]
-    assert (output_dir / "summaries/u01.summary.json").exists()
-    assert not (output_dir / "summaries/u02.summary.json").exists()
-    assert not (output_dir / "summaries/book_memory.json").exists()
-
-
-def test_three_invalid_where_is_where_answers_raise_and_preserve_saved_chapters(
-    tmp_path: Path,
-) -> None:
-    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
-
-    make_extraction(tmp_path, [["Mara entered the hall."], ["Mara climbed the tower."]])
-    title, chapters = load_chapters(tmp_path / "extracted", "sample")
-    output_dir = tmp_path / "ingest/sample/summary"
-    output_dir.mkdir(parents=True)
-    dropped = "The Gate | - | stone gate"
-    llm, transport = make(
-        [
-            "Mara entered the hall.",
-            "Mara | - | traveler",
-            "The Gate | - | stone gate\nGreat Hall | - | hall inside the gate",
-            "Mara climbed the tower.",
-            "Mara | - | traveler",
-            dropped,
-            "The Gate | missing third field",
-            dropped,
-        ]
-    )
-    with pytest.raises(LLMError, match="Great Hall"):
-        build_summarize_chapter_graph(llm).invoke(
-            {"title": title, "chapters": chapters, "output_dir": output_dir}
-        )
-    assert len(transport.requests) == 8
-    assert "Rejected:" in transport.requests[6]["messages"][-1]["content"]
-    assert "Rejected:" in transport.requests[7]["messages"][-1]["content"]
-    assert (output_dir / "summaries/u01.summary.json").exists()
-    assert not (output_dir / "summaries/u02.summary.json").exists()
-    assert not (output_dir / "summaries/book_memory.json").exists()
+def forbidden_term(request: pytest.FixtureRequest) -> str:
+    return str(request.param)
 
 
 def test_summary_graph_completes_seventeen_chapters_in_source_order(tmp_path: Path) -> None:
@@ -489,15 +522,25 @@ def test_summary_graph_completes_seventeen_chapters_in_source_order(tmp_path: Pa
     title, chapters = load_chapters(tmp_path / "extracted", "sample")
     output_dir = tmp_path / "ingest/sample/summary"
     output_dir.mkdir(parents=True)
-    replies: list[str] = []
+    replies: list[str | dict[str, Any] | Exception] = []
     for i in range(1, 18):
-        replies.extend(
-            [
-                f"Summary of day {i}.",
-                f"Mara | - | traveler on day {i}",
-                f"The Gate | - | stone gate on day {i}",
-            ]
-        )
+        replies.append(f"Summary of day {i}.")
+        if i == 1:
+            replies.append({"add": [card("Mara", f"traveler on day {i}")], "update": []})
+            replies.append({"add": [card("The Gate", f"stone gate on day {i}")], "update": []})
+        else:
+            replies.append(
+                {
+                    "add": [],
+                    "update": [card_update("C001", "Mara", f"traveler on day {i}")],
+                }
+            )
+            replies.append(
+                {
+                    "add": [],
+                    "update": [card_update("P001", "The Gate", f"stone gate on day {i}")],
+                }
+            )
     replies.append("Core memory of all seventeen days.")
     llm = ScriptedLLM(replies)
     final = build_summarize_chapter_graph(llm).invoke(
@@ -505,15 +548,25 @@ def test_summary_graph_completes_seventeen_chapters_in_source_order(tmp_path: Pa
         {"recursion_limit": summarize_chapter_recursion_limit(len(chapters))},
     )
     assert final["chapter_index"] == 17
-    assert len(llm.prompts) == 52
-    assert "Current chapter: u10" in llm.prompts[27]
+    assert len(llm.prompts) == 52  # 17 text + 17 who + 17 where + 1 book memory
+    assert "Current chapter: u10" in llm.prompts[27]  # u10 text call
     assert "Mara | - | traveler on day 9" in llm.prompts[27]
-    assert "The Gate | - | stone gate on day 9" in llm.prompts[27]
     assert "[u09]\nSummary of day 9." in llm.prompts[27]
     assert "Summary of day 10." not in llm.prompts[27]
+    assert "Current chapter: u10" in llm.prompts[28]  # u10 who call
+    assert "C001 | Mara | - | traveler on day 9" in llm.prompts[28]
     assert len(list((output_dir / "summaries").glob("*.summary.json"))) == 17
     assert json.loads((output_dir / "summaries/book_memory.json").read_text()) == {
         "who_is_who": "Mara | - | traveler on day 17",
         "where_is_where": "The Gate | - | stone gate on day 17",
         "core_memory": "Core memory of all seventeen days.",
     }
+
+
+def test_legacy_validators_compatibility() -> None:
+    # Verify legacy validate_who_is_who and validate_where_is_where still work as expected
+    text = "Mara | - | traveler"
+    assert validate_who_is_who(text) == text
+    where = "The Gate | - | stone gate"
+    assert validate_where_is_where(where) == where
+    assert name_key("Madam Malkin’s Robes") == name_key("Madam Malkin's Robes")

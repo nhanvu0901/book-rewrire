@@ -88,6 +88,7 @@ def ingest(
                 settings,
                 model=settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL,
                 max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
+                reasoning=settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
             ),
             extracted_dir=settings.extracted_dir,
             ingest_dir=settings.BOOK_CLONE_DATA_DIR / "ingest",

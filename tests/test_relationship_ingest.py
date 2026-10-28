@@ -64,14 +64,30 @@ def test_one_relationship_call_per_chapter_after_character_step_and_prompt_marke
     summaries = ScriptedLLM(
         [
             "SUMMARY_CH1",
-            "Mara | - | WHO_CH1",
-            "The Gate | - | WHERE_CH1",
+            {"add": [{"name": "Mara", "other_names": [], "card": "WHO_CH1"}], "update": []},
+            {"add": [{"name": "The Gate", "other_names": [], "card": "WHERE_CH1"}], "update": []},
             "SUMMARY_CH2",
-            "Mara | - | WHO_CH2",
-            "The Gate | - | WHERE_CH2",
+            {
+                "add": [],
+                "update": [{"id": "C001", "name": "Mara", "other_names": [], "card": "WHO_CH2"}],
+            },
+            {
+                "add": [],
+                "update": [
+                    {"id": "P001", "name": "The Gate", "other_names": [], "card": "WHERE_CH2"}
+                ],
+            },
             "SUMMARY_CH3",
-            "Mara | - | WHO_CH3",
-            "The Gate | - | WHERE_CH3",
+            {
+                "add": [],
+                "update": [{"id": "C001", "name": "Mara", "other_names": [], "card": "WHO_CH3"}],
+            },
+            {
+                "add": [],
+                "update": [
+                    {"id": "P001", "name": "The Gate", "other_names": [], "card": "WHERE_CH3"}
+                ],
+            },
             "CORE_MEMORY",
         ]
     )
@@ -377,9 +393,11 @@ def test_character_merge_rewrites_relationship_ids_and_merges_duplicate_open_rec
 
 
 def test_recursion_limit_helpers_count_nodes_per_chapter() -> None:
-    assert SUMMARY_NODES_PER_CHAPTER == 3
+    assert SUMMARY_NODES_PER_CHAPTER == 5
     assert EXTRACT_NODES_PER_CHAPTER >= 5
-    assert summarize_chapter_recursion_limit(17) == max(25, 17 * 4 + 10)
+    assert summarize_chapter_recursion_limit(17) == max(
+        25, 17 * (SUMMARY_NODES_PER_CHAPTER + 1) + 10
+    )
     assert extract_character_recursion_limit(17) == max(
         25, 17 * (EXTRACT_NODES_PER_CHAPTER + 1) + 10
     )

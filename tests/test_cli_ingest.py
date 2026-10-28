@@ -23,6 +23,7 @@ def use_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **values: Any)
             "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
             "OPENROUTER_MODEL": "openai/gpt-4o-mini",
             "OPENROUTER_SUMMARIZE_CHAPTER_MODEL": "example/summary",
+            "OPENROUTER_SUMMARIZE_CHAPTER_REASONING": "medium",
             "OPENROUTER_EXTRACT_CHARACTER_MODEL": "example/characters",
             "OPENROUTER_MAX_TOKENS": 8192,
             "OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS": 4096,
@@ -96,5 +97,5 @@ def test_ingest_without_neo4j_never_connects(
     assert calls["character_llm"].reasoning == "enabled"
     assert calls["character_llm"].structured_outputs is True
     assert calls["summary_llm"].providers == []
-    assert calls["summary_llm"].reasoning == "none"
+    assert calls["summary_llm"].reasoning == "medium"
     assert calls["summary_llm"].structured_outputs is False

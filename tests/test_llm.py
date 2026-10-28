@@ -25,6 +25,7 @@ def settings(**overrides: Any) -> Settings:
         "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
         "OPENROUTER_MODEL": "openai/gpt-4o-mini",
         "OPENROUTER_SUMMARIZE_CHAPTER_MODEL": "example/summary",
+        "OPENROUTER_SUMMARIZE_CHAPTER_REASONING": "medium",
         "OPENROUTER_EXTRACT_CHARACTER_MODEL": "example/characters",
         "OPENROUTER_MAX_TOKENS": 8192,
         "OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS": 4096,
@@ -370,6 +371,27 @@ def test_summary_client_request_remains_unchanged() -> None:
         ],
         "max_tokens": 4096,
     }
+
+
+@pytest.mark.parametrize(
+    ("reasoning", "expected"),
+    [
+        ("enabled", {"enabled": True}),
+        ("low", {"effort": "low"}),
+        ("medium", {"effort": "medium"}),
+        ("high", {"effort": "high"}),
+    ],
+)
+def test_text_completion_sends_configured_reasoning(
+    reasoning: ReasoningMode, expected: dict[str, Any]
+) -> None:
+    fake = FakeOpenAI(["Chapter summary."])
+    client = OpenRouterClient(settings(), client=fake, reasoning=reasoning)  # type: ignore[arg-type]
+
+    client.complete_text("Chapter body.", system_prompt="Summarize.")
+
+    assert fake.requests[0]["extra_body"] == {"reasoning": expected}
+    assert "response_format" not in fake.requests[0]
 
 
 def test_finish_reason_error_raises_llm_error_without_retry_loop() -> None:

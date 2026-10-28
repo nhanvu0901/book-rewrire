@@ -3,11 +3,12 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from pov_retell.infrastructure.llm import MAX_RETRIES, LLMError, TextLLM
+from pov_retell.infrastructure.llm import JsonLLM, TextLLM
 from pov_retell.ingest.graph.summarize_chapter.model import (
     BookMemory,
+    Card,
+    CardChanges,
     ChapterSummary,
-    SummarizeChapterResponse,
 )
 from pov_retell.ingest.graph.summarize_chapter.prompt.summarize_book import (
     BOOK_SUMMARY_INPUT,
@@ -16,16 +17,6 @@ from pov_retell.ingest.graph.summarize_chapter.prompt.summarize_book import (
 from pov_retell.ingest.graph.summarize_chapter.prompt.summarize_chapter import (
     PROMPT_SUMMARIZE_CHAPTER,
     SUMMARY_INPUT,
-)
-from pov_retell.ingest.graph.summarize_chapter.prompt.update_where_is_where import (
-    PROMPT_UPDATE_WHERE_IS_WHERE,
-    UPDATE_WHERE_IS_WHERE_REMINDER,
-    WHERE_IS_WHERE_INPUT,
-)
-from pov_retell.ingest.graph.summarize_chapter.prompt.update_who_is_who import (
-    PROMPT_UPDATE_WHO_IS_WHO,
-    UPDATE_WHO_IS_WHO_REMINDER,
-    WHO_IS_WHO_INPUT,
 )
 from pov_retell.ingest.model import Chapter
 
@@ -46,6 +37,95 @@ def format_previous_context(summaries: Sequence[ChapterSummary]) -> str:
         f"WHERE IS WHERE\n{last.where_is_where}\n\n"
         f"CHAPTER SUMMARIES\n{chapter_summaries}"
     )
+
+
+_QUOTE_TRANSLATION = str.maketrans(
+    {
+        "’": "'",
+        "‘": "'",
+        "‛": "'",
+        "ʼ": "'",
+        "′": "'",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "″": '"',
+    }
+)
+
+
+def name_key(text: str) -> str:
+    """Comparison key for names (T-0012): case, quotes and spacing do not matter."""
+    return " ".join(text.translate(_QUOTE_TRANSLATION).split()).casefold()
+
+
+def _name_key(text: str) -> str:
+    return name_key(text)
+
+
+def render_cards(cards: dict[str, Card], *, with_ids: bool) -> str:
+    """Text form. With ids for the prompt; without ids for the saved summary file."""
+    lines = []
+    for card_id, card in cards.items():
+        other_names = ", ".join(card.other_names) or "-"
+        line = f"{card.name} | {other_names} | {card.card}"
+        lines.append(f"{card_id} | {line}" if with_ids else line)
+    return "\n".join(lines)
+
+
+def check_changes(changes: CardChanges, cards: dict[str, Card]) -> None:
+    """Raise ValueError for a reply that cannot be merged. The client then retries."""
+    unknown = [item.id for item in changes.update if item.id not in cards]
+    if unknown:
+        raise ValueError(f"update uses unknown id(s): {', '.join(unknown)}")
+    updated_ids = [item.id for item in changes.update]
+    if len(updated_ids) != len(set(updated_ids)):
+        raise ValueError("update lists the same id more than once")
+
+    known = {
+        name_key(name): card_id
+        for card_id, card in cards.items()
+        for name in [card.name, *card.other_names]
+    }
+    seen: set[str] = set()
+    for item in changes.add:
+        for name in [item.name, *item.other_names]:
+            key = name_key(name)
+            if key in known:
+                raise ValueError(f"{name!r} is already listed as {known[key]}; use update")
+            if key in seen:
+                raise ValueError(f"{name!r} is added twice")
+            seen.add(key)
+
+
+def changes_to_update(changes: CardChanges, cards: dict[str, Card], prefix: str) -> dict[str, Card]:
+    """Turn a checked reply into the dict the reducer merges. New lines get the next ids."""
+    update = {item.id: Card(**item.model_dump(exclude={"id"})) for item in changes.update}
+    start = 1 + max((int(card_id[1:]) for card_id in cards), default=0)
+    for number, card in enumerate(changes.add, start=start):
+        update[f"{prefix}{number:03d}"] = card
+    return update
+
+
+def update_cards(
+    llm: JsonLLM,
+    rules: str,
+    input_template: str,
+    title: str,
+    chapter_id: str,
+    chapter_text: str,
+    cards: dict[str, Card],
+    prefix: str,
+) -> dict[str, Card]:
+    prompt = input_template.format(
+        rules=rules,
+        book_title=title,
+        chapter_id=chapter_id,
+        previous=render_cards(cards, with_ids=True) or "(empty)",
+        chapter_text=chapter_text,
+    )
+    changes = llm.complete_json(prompt, CardChanges, check=lambda c: check_changes(c, cards))
+    return changes_to_update(changes, cards, prefix)
 
 
 def _running_list_lines(text: str, label: str) -> list[str]:
@@ -73,8 +153,8 @@ def validate_running_list(
                 f"{label} line must have three non-empty fields separated by '|': {line!r}"
             )
         parsed.append((fields[0], fields[1], fields[2]))
-    surviving_names = {
-        entry.strip().casefold()
+    surviving_keys = {
+        name_key(entry)
         for first, second, _ in parsed
         for entry in [first, *second.split(",")]
         if entry.strip()
@@ -82,7 +162,7 @@ def validate_running_list(
     previous_names = [
         line.split("|")[0].strip() for line in _running_list_lines(previous_text, label)
     ]
-    missing = [name for name in previous_names if name and name.casefold() not in surviving_names]
+    missing = [name for name in previous_names if name and name_key(name) not in surviving_keys]
     if missing:
         raise ValueError(f"{label} dropped earlier {item_kind}(s): {', '.join(missing)}")
     return "\n".join(f"{first} | {second} | {third}" for first, second, third in parsed)
@@ -106,80 +186,19 @@ def validate_where_is_where(text: str, previous_where_is_where: str = "") -> str
     )
 
 
-def update_who_is_who(
-    llm: TextLLM,
-    title: str,
-    chapter: Chapter,
-    previous_who_is_who: str,
-) -> str:
-    prompt = (
-        WHO_IS_WHO_INPUT.format(
-            book_title=title,
-            chapter_id=chapter.unit_id,
-            previous_who_is_who=previous_who_is_who,
-            chapter_text=chapter.text,
-        )
-        + UPDATE_WHO_IS_WHO_REMINDER
-    )
-    error = ""
-    for attempt in range(1 + MAX_RETRIES):
-        request = prompt if attempt == 0 else f"{prompt}\n\nRejected: {error}"
-        reply = llm.complete_text(request, system_prompt=PROMPT_UPDATE_WHO_IS_WHO)
-        try:
-            return validate_who_is_who(reply, previous_who_is_who)
-        except ValueError as exc:
-            error = str(exc)
-    raise LLMError(f"no valid WHO IS WHO after {1 + MAX_RETRIES} attempts: {error}")
-
-
-def update_where_is_where(
-    llm: TextLLM,
-    title: str,
-    chapter: Chapter,
-    previous_where_is_where: str,
-) -> str:
-    prompt = (
-        WHERE_IS_WHERE_INPUT.format(
-            book_title=title,
-            chapter_id=chapter.unit_id,
-            previous_where_is_where=previous_where_is_where,
-            chapter_text=chapter.text,
-        )
-        + UPDATE_WHERE_IS_WHERE_REMINDER
-    )
-    error = ""
-    for attempt in range(1 + MAX_RETRIES):
-        request = prompt if attempt == 0 else f"{prompt}\n\nRejected: {error}"
-        reply = llm.complete_text(request, system_prompt=PROMPT_UPDATE_WHERE_IS_WHERE)
-        try:
-            return validate_where_is_where(reply, previous_where_is_where)
-        except ValueError as exc:
-            error = str(exc)
-    raise LLMError(f"no valid WHERE IS WHERE after {1 + MAX_RETRIES} attempts: {error}")
-
-
 def summarize_chapter(
     llm: TextLLM,
     title: str,
     chapter: Chapter,
     previous_summaries: Sequence[ChapterSummary] = (),
-) -> SummarizeChapterResponse:
+) -> str:
     source = SUMMARY_INPUT.format(
         book_title=title,
         chapter_id=chapter.unit_id,
         previous_book_summary=format_previous_context(previous_summaries),
         chapter_text=chapter.text,
     )
-    chapter_summary = llm.complete_text(source, system_prompt=PROMPT_SUMMARIZE_CHAPTER)
-    previous_who_is_who = previous_summaries[-1].who_is_who if previous_summaries else ""
-    who_is_who = update_who_is_who(llm, title, chapter, previous_who_is_who)
-    previous_where_is_where = previous_summaries[-1].where_is_where if previous_summaries else ""
-    where_is_where = update_where_is_where(llm, title, chapter, previous_where_is_where)
-    return SummarizeChapterResponse(
-        chapter_summary=chapter_summary,
-        who_is_who=who_is_who,
-        where_is_where=where_is_where,
-    )
+    return llm.complete_text(source, system_prompt=PROMPT_SUMMARIZE_CHAPTER)
 
 
 def summarize_book(

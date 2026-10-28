@@ -119,6 +119,7 @@ Sao chép `.env.example` thành `.env` rồi điền đủ giá trị. `.env` kh
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | |
 | `OPENROUTER_MODEL` | set in `.env` | Book structure mapping (`pov extract`) |
 | `OPENROUTER_SUMMARIZE_CHAPTER_MODEL` | set in `.env` | Chapter and cumulative book summaries |
+| `OPENROUTER_SUMMARIZE_CHAPTER_REASONING` | `none`, `enabled`, `low`, `medium`, or `high` in `.env` | Summary reasoning; `none` omits the parameter and uses the provider default |
 | `OPENROUTER_EXTRACT_CHARACTER_MODEL` | set in `.env` | Full character profiles, aliases and merges (`pov ingest`) |
 | `OPENROUTER_MAX_TOKENS` | set in `.env` | Output-token limit for `OPENROUTER_MODEL` (`pov extract`) and diagnostics, including reasoning tokens |
 | `OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS` | set in `.env` | Output-token limit for the summary model |

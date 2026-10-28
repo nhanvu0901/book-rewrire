@@ -21,15 +21,75 @@ def test_ingest_passes_only_preceding_who_is_who_where_is_where_and_chapter_summ
     summaries = ScriptedLLM(
         [
             "PAST_CHAPTER_ONE",
-            "Mara | - | WHO_AFTER_ONE",
-            "The Gate | - | WHERE_AFTER_ONE",
+            {"add": [{"name": "Mara", "other_names": [], "card": "WHO_AFTER_ONE"}], "update": []},
+            {
+                "add": [{"name": "The Gate", "other_names": [], "card": "WHERE_AFTER_ONE"}],
+                "update": [],
+            },
             "CURRENT_CHAPTER_TWO",
-            "Mara | - | WHO_AFTER_TWO\nJo | - | companion",
-            "The Gate | - | WHERE_AFTER_TWO\nGreat Hall | - | hall inside the gate",
+            {
+                "add": [{"name": "Jo", "other_names": [], "card": "companion"}],
+                "update": [
+                    {
+                        "id": "C001",
+                        "name": "Mara",
+                        "other_names": [],
+                        "card": "WHO_AFTER_TWO",
+                    }
+                ],
+            },
+            {
+                "add": [
+                    {
+                        "name": "Great Hall",
+                        "other_names": [],
+                        "card": "hall inside the gate",
+                    }
+                ],
+                "update": [
+                    {
+                        "id": "P001",
+                        "name": "The Gate",
+                        "other_names": [],
+                        "card": "WHERE_AFTER_TWO",
+                    }
+                ],
+            },
             "FUTURE_CHAPTER_THREE",
-            "Mara | - | WHO_AFTER_THREE\nJo | - | companion\nFUTURE_PERSON | - | stranger",
-            "The Gate | - | WHERE_AFTER_THREE\nGreat Hall | - | hall inside the gate\n"
-            "FUTURE_PLACE | - | tower",
+            {
+                "add": [
+                    {
+                        "name": "FUTURE_PERSON",
+                        "other_names": [],
+                        "card": "stranger",
+                    }
+                ],
+                "update": [
+                    {
+                        "id": "C001",
+                        "name": "Mara",
+                        "other_names": [],
+                        "card": "WHO_AFTER_THREE",
+                    }
+                ],
+            },
+            {
+                "add": [
+                    {
+                        "name": "FUTURE_PLACE",
+                        "other_names": [],
+                        "card": "tower",
+                    }
+                ],
+                "update": [
+                    {
+                        "id": "P001",
+                        "name": "The Gate",
+                        "other_names": [],
+                        "card": "WHERE_AFTER_THREE",
+                    }
+                ],
+            },
             "FUTURE_CORE_MEMORY",
         ]
     )
@@ -102,8 +162,8 @@ def test_summary_failure_keeps_saved_summaries_and_prevents_extraction(tmp_path:
     summaries = ScriptedLLM(
         [
             "First summary",
-            "Mara | - | traveler",
-            "The Gate | - | stone gate",
+            {"add": [{"name": "Mara", "other_names": [], "card": "traveler"}], "update": []},
+            {"add": [{"name": "The Gate", "other_names": [], "card": "stone gate"}], "update": []},
             LLMError("Summary unavailable"),
         ]
     )

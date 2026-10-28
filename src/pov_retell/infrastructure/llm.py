@@ -69,6 +69,10 @@ class TextLLM(Protocol):
     def complete_text(self, text: str, *, system_prompt: str) -> str: ...
 
 
+class SummarizeLLM(TextLLM, JsonLLM, Protocol):
+    """What the summarize_chapter graph needs: plain text summaries and JSON card updates."""
+
+
 class OpenRouterClient:
     def __init__(
         self,
@@ -102,10 +106,19 @@ class OpenRouterClient:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": text},
         ]
-        reply = self._ask(messages, json_mode=False).strip()
+        reasoning = self._reasoning_options()
+        extra_body = {"reasoning": reasoning} if reasoning is not None else None
+        reply = self._ask(messages, json_mode=False, extra_body=extra_body).strip()
         if not reply:
             raise LLMError("OpenRouter returned an empty text response")
         return reply
+
+    def _reasoning_options(self) -> dict[str, Any] | None:
+        if self.reasoning == "enabled":
+            return {"enabled": True}
+        if self.reasoning in ("low", "medium", "high"):
+            return {"effort": self.reasoning}
+        return None
 
     def _json_request_options(
         self, schema: type[BaseModel]
@@ -134,10 +147,9 @@ class OpenRouterClient:
         elif self.structured_outputs:
             extra_body["provider"] = {"require_parameters": True}
 
-        if self.reasoning == "enabled":
-            extra_body["reasoning"] = {"enabled": True}
-        elif self.reasoning in ("low", "medium", "high"):
-            extra_body["reasoning"] = {"effort": self.reasoning}
+        reasoning = self._reasoning_options()
+        if reasoning is not None:
+            extra_body["reasoning"] = reasoning
 
         return response_format, (extra_body or None)
 

@@ -13,9 +13,9 @@ example, "a picture of an old man" stays "a picture of an old man", not a named 
 person.
 
 WHO IS WHO
-Return one line per individual character, in order of first appearance, at most 40
-words per identity card, always with exactly three fields separated by " | ":
-<name> | <comma-separated other names or titles used in the text, or -> | <identity card>
+Each entry has three JSON fields: "name", "other_names" (other names or titles used in
+the text; an empty list when there are none) and "card" (the identity card, at most
+40 words).
 - The identity card describes who the character is as of the end of the current chapter,
   not a history:
   - who they are: species or kind, role, family, allegiance, key relationships;
@@ -81,5 +81,3 @@ Current chapter: {chapter_id}
 {chapter_text}
 </chapter_text>
 """
-
-UPDATE_WHO_IS_WHO_REMINDER = ""

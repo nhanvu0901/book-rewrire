@@ -10,9 +10,8 @@ completely. Every place name, alternative name, containment relation, owner or r
 and state you write must be stated in the supplied inputs.
 
 WHERE IS WHERE
-Return one line per place, in order of first appearance, at most 30 words per place
-card, always with exactly three fields separated by " | ":
-<name> | <comma-separated other names used in the text, or -> | <place card>
+Each entry has three JSON fields: "name", "other_names" (other names used in the text;
+an empty list when there are none) and "card" (the place card, at most 30 words).
 - The place card describes the place as of the end of the current chapter, not an event
   history:
   - what kind of place it is (for example a country, forest, house, room, cave, hill,
@@ -69,5 +68,3 @@ Current chapter: {chapter_id}
 {chapter_text}
 </chapter_text>
 """
-
-UPDATE_WHERE_IS_WHERE_REMINDER = ""

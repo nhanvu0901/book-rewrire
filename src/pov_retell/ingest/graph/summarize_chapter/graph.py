@@ -4,7 +4,7 @@ from typing import Any, Literal
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from pov_retell.infrastructure.llm import SummarizeLLM
+from pov_retell.infrastructure.llm import JsonLLM, TextLLM
 from pov_retell.ingest.graph.summarize_chapter import logic
 from pov_retell.ingest.graph.summarize_chapter.model import (
     ChapterSummary,
@@ -27,7 +27,8 @@ def summarize_chapter_recursion_limit(chapter_count: int) -> int:
 
 
 def build_summarize_chapter_graph(
-    llm: SummarizeLLM,
+    llm: TextLLM,
+    card_llm: JsonLLM,
     on_step: Callable[[str], None] | None = None,
 ) -> CompiledStateGraph[SummarizeChapterState, Any, SummarizeChapterState, SummarizeChapterState]:
     def report(message: str) -> None:
@@ -59,7 +60,7 @@ def build_summarize_chapter_graph(
         chapter = state["chapters"][state["chapter_index"]]
         report(f"update_who_is_who {chapter.unit_id}")
         update = logic.update_cards(
-            llm,
+            card_llm,
             PROMPT_UPDATE_WHO_IS_WHO,
             WHO_IS_WHO_INPUT,
             state["title"],
@@ -74,7 +75,7 @@ def build_summarize_chapter_graph(
         chapter = state["chapters"][state["chapter_index"]]
         report(f"update_where_is_where {chapter.unit_id}")
         update = logic.update_cards(
-            llm,
+            card_llm,
             PROMPT_UPDATE_WHERE_IS_WHERE,
             WHERE_IS_WHERE_INPUT,
             state["title"],

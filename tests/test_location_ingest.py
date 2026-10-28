@@ -10,6 +10,7 @@ from test_character_ingest import (
     character,
     extraction,
     make_extraction,
+    split_card_answers,
     summary_client,
 )
 from test_llm import make
@@ -61,7 +62,7 @@ def test_one_location_call_per_chapter_assigns_ids_reuses_existing_and_saves_fil
             ["Mara rested in Oak Manor."],
         ],
     )
-    summaries = ScriptedLLM(
+    texts, cards = split_card_answers(
         [
             "SUMMARY_CH1",
             {"add": [{"name": "Mara", "other_names": [], "card": "traveler"}], "update": []},
@@ -148,8 +149,10 @@ def test_one_location_call_per_chapter_assigns_ids_reuses_existing_and_saves_fil
             ),
             extraction(character("Mara", "char_001")),
             loc_response(),
-        ]
+        ],
+        cards=cards,
     )
+    summaries = ScriptedLLM(texts)
     steps: list[str] = []
     result = ingest_book(
         "sample",

@@ -39,6 +39,7 @@ def test_unknown_character_id_retries_before_saving(tmp_path: Path) -> None:
         [
             json.dumps(value)
             for value in [
+                *[{"add": [], "update": []}] * 4,  # WHO/WHERE card updates for u01 and u02
                 extraction(character("Mara")),
                 {"relationships": []},
                 {"locations": []},
@@ -59,8 +60,8 @@ def test_unknown_character_id_retries_before_saving(tmp_path: Path) -> None:
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert result.character_count == 1 and len(transport.requests) == 9
-    assert "unknown character ID" in transport.requests[5]["messages"][-1]["content"]
+    assert result.character_count == 1 and len(transport.requests) == 13
+    assert "unknown character ID" in transport.requests[9]["messages"][-1]["content"]
 
 
 def test_repeated_invalid_ids_preserve_last_completed_chapter(tmp_path: Path) -> None:
@@ -70,6 +71,7 @@ def test_repeated_invalid_ids_preserve_last_completed_chapter(tmp_path: Path) ->
         [
             json.dumps(value)
             for value in [
+                *[{"add": [], "update": []}] * 4,  # WHO/WHERE card updates for u01 and u02
                 extraction(character("Mara")),
                 {"relationships": []},
                 {"locations": []},
@@ -107,6 +109,7 @@ def test_response_with_relationships_key_is_rejected_and_triggers_repair_retry(
     }
     client, transport = make(
         [
+            *[json.dumps({"add": [], "update": []})] * 2,  # WHO/WHERE card updates for u01
             json.dumps(extraction(with_relationships)),
             json.dumps(extraction(character("Mara"))),
             json.dumps({"relationships": []}),
@@ -122,8 +125,8 @@ def test_response_with_relationships_key_is_rejected_and_triggers_repair_retry(
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert result.character_count == 1 and len(transport.requests) == 5
-    retry_message = transport.requests[1]["messages"][-1]["content"]
+    assert result.character_count == 1 and len(transport.requests) == 7
+    retry_message = transport.requests[3]["messages"][-1]["content"]
     assert "Rejected:" in retry_message and "relationships" in retry_message
 
 

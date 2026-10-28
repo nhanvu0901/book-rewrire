@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from pov_retell.infrastructure.llm import JsonLLM, SummarizeLLM
+from pov_retell.infrastructure.llm import JsonLLM, TextLLM
 from pov_retell.ingest.graph.extract_character import logic
 from pov_retell.ingest.graph.extract_character.graph import (
     build_extract_character_graph,
@@ -26,7 +26,7 @@ def ingest_book(
     character_llm: JsonLLM,
     writer: CharacterWriter | None,
     *,
-    summary_llm: SummarizeLLM,
+    summary_llm: TextLLM,
     extracted_dir: Path,
     ingest_dir: Path,
     run_id: str | None = None,
@@ -44,7 +44,8 @@ def ingest_book(
         on_step(f"Run {run_id}: {output_dir}")
     if on_step is not None:
         on_step(f"Build summarize_chapter graph: model={getattr(summary_llm, 'model', 'unknown')}")
-    summary_graph = build_summarize_chapter_graph(summary_llm, on_step)
+    # WHO IS WHO / WHERE IS WHERE card updates need JSON, so they use the extract client.
+    summary_graph = build_summarize_chapter_graph(summary_llm, character_llm, on_step)
     summary_state = summary_graph.invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir},
         {

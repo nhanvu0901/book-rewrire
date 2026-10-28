@@ -69,10 +69,6 @@ class TextLLM(Protocol):
     def complete_text(self, text: str, *, system_prompt: str) -> str: ...
 
 
-class SummarizeLLM(TextLLM, JsonLLM, Protocol):
-    """What the summarize_chapter graph needs: plain text summaries and JSON card updates."""
-
-
 class OpenRouterClient:
     def __init__(
         self,

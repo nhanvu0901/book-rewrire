@@ -12,8 +12,6 @@ from pov_retell.ingest.graph.summarize_chapter.logic import (
     check_changes,
     name_key,
     render_cards,
-    validate_where_is_where,
-    validate_who_is_who,
 )
 from pov_retell.ingest.graph.summarize_chapter.model import (
     Card,
@@ -22,11 +20,9 @@ from pov_retell.ingest.graph.summarize_chapter.model import (
 )
 from pov_retell.ingest.graph.summarize_chapter.prompt.update_where_is_where import (
     PROMPT_UPDATE_WHERE_IS_WHERE,
-    UPDATE_WHERE_IS_WHERE_REMINDER,
 )
 from pov_retell.ingest.graph.summarize_chapter.prompt.update_who_is_who import (
     PROMPT_UPDATE_WHO_IS_WHO,
-    UPDATE_WHO_IS_WHO_REMINDER,
 )
 from pov_retell.ingest.source import load_chapters
 
@@ -88,7 +84,7 @@ def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory
             "FINAL_CORE_MEMORY",
         ]
     )
-    final = build_summarize_chapter_graph(llm).invoke(
+    final = build_summarize_chapter_graph(llm, llm).invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir}
     )
     assert final["chapter_index"] == 3
@@ -191,7 +187,7 @@ def test_fake_chapter_update_only_preserves_earlier_cards(tmp_path: Path) -> Non
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm).invoke(
+    final = build_summarize_chapter_graph(llm, llm).invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir}
     )
     assert final["who_is_who"] == "Mara | - | lone traveler\nJo | - | friend"
@@ -221,7 +217,7 @@ def test_unknown_update_id_retries_and_raises_after_max_retries(tmp_path: Path) 
         ]
     )
     with pytest.raises(LLMError, match=r"update uses unknown id\(s\): C999"):
-        build_summarize_chapter_graph(llm).invoke(
+        build_summarize_chapter_graph(llm, llm).invoke(
             {"title": title, "chapters": chapters, "output_dir": output_dir}
         )
     assert len(transport.requests) == 7
@@ -251,7 +247,7 @@ def test_duplicate_name_add_retries_and_raises_after_max_retries(tmp_path: Path)
         ]
     )
     with pytest.raises(LLMError, match=r"'Mara' is already listed as C001; use update"):
-        build_summarize_chapter_graph(llm).invoke(
+        build_summarize_chapter_graph(llm, llm).invoke(
             {"title": title, "chapters": chapters, "output_dir": output_dir}
         )
     assert len(transport.requests) == 7
@@ -279,7 +275,7 @@ def test_unknown_update_id_retries_and_recovers(tmp_path: Path) -> None:
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm).invoke(
+    final = build_summarize_chapter_graph(llm, llm).invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir}
     )
     assert len(transport.requests) == 8
@@ -309,7 +305,7 @@ def test_quote_normalized_duplicate_name_add_retries_and_recovers(tmp_path: Path
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm).invoke(
+    final = build_summarize_chapter_graph(llm, llm).invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir}
     )
     assert len(transport.requests) == 8
@@ -348,7 +344,7 @@ def test_ids_are_stable_across_chapters_and_continue_sequence(tmp_path: Path) ->
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm).invoke(
+    final = build_summarize_chapter_graph(llm, llm).invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir}
     )
     assert list(final["who_cards"].keys()) == ["C001", "C002", "C003"]
@@ -466,10 +462,8 @@ def test_changes_to_update_assigns_sequential_ids() -> None:
 def test_who_is_who_and_where_is_where_prompts_are_book_agnostic(forbidden_term: str) -> None:
     import re
 
-    who_combined = (PROMPT_UPDATE_WHO_IS_WHO + "\n" + UPDATE_WHO_IS_WHO_REMINDER).casefold()
-    where_combined = (
-        PROMPT_UPDATE_WHERE_IS_WHERE + "\n" + UPDATE_WHERE_IS_WHERE_REMINDER
-    ).casefold()
+    who_combined = PROMPT_UPDATE_WHO_IS_WHO.casefold()
+    where_combined = PROMPT_UPDATE_WHERE_IS_WHERE.casefold()
     assert re.search(rf"\b{re.escape(forbidden_term)}\b", who_combined, re.IGNORECASE) is None
     assert re.search(rf"\b{re.escape(forbidden_term)}\b", where_combined, re.IGNORECASE) is None
     assert "about 40" not in who_combined
@@ -543,18 +537,19 @@ def test_summary_graph_completes_seventeen_chapters_in_source_order(tmp_path: Pa
             )
     replies.append("Core memory of all seventeen days.")
     llm = ScriptedLLM(replies)
-    final = build_summarize_chapter_graph(llm).invoke(
+    final = build_summarize_chapter_graph(llm, llm).invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir},
         {"recursion_limit": summarize_chapter_recursion_limit(len(chapters))},
     )
     assert final["chapter_index"] == 17
-    assert len(llm.prompts) == 52  # 17 text + 17 who + 17 where + 1 book memory
-    assert "Current chapter: u10" in llm.prompts[27]  # u10 text call
-    assert "Mara | - | traveler on day 9" in llm.prompts[27]
-    assert "[u09]\nSummary of day 9." in llm.prompts[27]
-    assert "Summary of day 10." not in llm.prompts[27]
-    assert "Current chapter: u10" in llm.prompts[28]  # u10 who call
-    assert "C001 | Mara | - | traveler on day 9" in llm.prompts[28]
+    assert len(llm.prompts) == 18  # 17 chapter summaries + 1 book memory
+    assert len(llm.card_prompts) == 34  # 17 WHO IS WHO + 17 WHERE IS WHERE
+    assert "Current chapter: u10" in llm.prompts[9]  # u10 text call
+    assert "Mara | - | traveler on day 9" in llm.prompts[9]
+    assert "[u09]\nSummary of day 9." in llm.prompts[9]
+    assert "Summary of day 10." not in llm.prompts[9]
+    assert "Current chapter: u10" in llm.card_prompts[18]  # u10 who call
+    assert "C001 | Mara | - | traveler on day 9" in llm.card_prompts[18]
     assert len(list((output_dir / "summaries").glob("*.summary.json"))) == 17
     assert json.loads((output_dir / "summaries/book_memory.json").read_text()) == {
         "who_is_who": "Mara | - | traveler on day 17",
@@ -563,10 +558,110 @@ def test_summary_graph_completes_seventeen_chapters_in_source_order(tmp_path: Pa
     }
 
 
-def test_legacy_validators_compatibility() -> None:
-    # Verify legacy validate_who_is_who and validate_where_is_where still work as expected
-    text = "Mara | - | traveler"
-    assert validate_who_is_who(text) == text
-    where = "The Gate | - | stone gate"
-    assert validate_where_is_where(where) == where
+def test_quote_style_does_not_change_the_name_comparison_key() -> None:
     assert name_key("Madam Malkin’s Robes") == name_key("Madam Malkin's Robes")
+
+
+class TextOnlyLLM(ScriptedLLM):
+    def complete_json(self, *args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("the summary client must not receive card updates")
+
+
+class CardOnlyLLM(ScriptedLLM):
+    def complete_text(self, text: str, *, system_prompt: str) -> str:
+        raise AssertionError("the card client must not receive summary calls")
+
+
+def run_summary_graph(
+    tmp_path: Path, summary_llm: ScriptedLLM, card_llm: ScriptedLLM, chapter_count: int
+) -> tuple[dict[str, Any], Path]:
+    from pov_retell.ingest.graph.summarize_chapter.graph import build_summarize_chapter_graph
+
+    make_extraction(tmp_path, [[f"Mara arrived on day {i}."] for i in range(1, chapter_count + 1)])
+    title, chapters = load_chapters(tmp_path / "extracted", "sample")
+    output_dir = tmp_path / "ingest/sample/summary"
+    output_dir.mkdir(parents=True)
+    final = build_summarize_chapter_graph(summary_llm, card_llm).invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    )
+    return final, output_dir
+
+
+def test_card_updates_go_to_the_card_client_and_summaries_to_the_summary_client(
+    tmp_path: Path,
+) -> None:
+    summaries = TextOnlyLLM(["Summary one.", "Summary two.", "Core memory."])
+    cards = CardOnlyLLM(
+        [],
+        cards=[
+            {"add": [card("Mara", "traveler")], "update": []},
+            {"add": [card("The Gate", "stone gate")], "update": []},
+            {"add": [], "update": [card_update("C001", "Mara", "tired traveler")]},
+            {"add": [], "update": []},
+        ],
+    )
+    final, _ = run_summary_graph(tmp_path, summaries, cards, 2)
+    assert len(summaries.prompts) == 3 and summaries.card_prompts == []
+    assert len(cards.card_prompts) == 4 and cards.prompts == []
+    assert final["book_memory"].who_is_who == "Mara | - | tired traveler"
+    assert final["book_memory"].where_is_where == "The Gate | - | stone gate"
+
+
+@pytest.mark.parametrize("failing_call", [2, 3], ids=["who_is_who", "where_is_where"])
+def test_card_update_failure_in_chapter_two_keeps_chapter_one_saved(
+    tmp_path: Path, failing_call: int
+) -> None:
+    # Card calls in order: u01 who, u01 where, u02 who, u02 where.
+    card_answers: list[dict[str, Any] | Exception] = [{"add": [], "update": []} for _ in range(4)]
+    card_answers[failing_call] = LLMError("cards down")
+    card_llm = ScriptedLLM([], cards=card_answers)
+    summaries = ScriptedLLM(["Summary one.", "Summary two.", "Core memory."])
+    with pytest.raises(LLMError, match="cards down"):
+        run_summary_graph(tmp_path, summaries, card_llm, 2)
+    assert len(card_llm.card_prompts) == failing_call + 1
+    saved = tmp_path / "ingest/sample/summary/summaries"
+    assert (saved / "u01.summary.json").exists()
+    assert not (saved / "u02.summary.json").exists()
+    assert not (saved / "book_memory.json").exists()
+
+
+def test_summary_failure_in_chapter_two_keeps_chapter_one_saved(tmp_path: Path) -> None:
+    summaries = ScriptedLLM(["Summary one.", LLMError("empty text response")])
+    with pytest.raises(LLMError, match="empty text response"):
+        run_summary_graph(tmp_path, summaries, ScriptedLLM([]), 2)
+    saved = tmp_path / "ingest/sample/summary/summaries"
+    assert (saved / "u01.summary.json").exists()
+    assert not (saved / "u02.summary.json").exists()
+
+
+def test_chapter_without_characters_or_places_saves_empty_lists(tmp_path: Path) -> None:
+    final, output_dir = run_summary_graph(
+        tmp_path, ScriptedLLM(["Summary one.", "Core memory."]), ScriptedLLM([]), 1
+    )
+    saved = json.loads((output_dir / "summaries/u01.summary.json").read_text())
+    assert saved["who_is_who"] == "" and saved["where_is_where"] == ""
+    assert final["book_memory"].who_is_who == ""
+
+
+def test_card_changes_schema_has_no_regex_pattern_and_is_strict() -> None:
+    from pov_retell.infrastructure.llm import strict_json_schema
+
+    schema = strict_json_schema(CardChanges)
+    assert '"pattern"' not in json.dumps(schema)
+
+    def objects(node: Any) -> list[dict[str, Any]]:
+        if isinstance(node, dict):
+            found = [node] if node.get("type") == "object" else []
+            return found + [item for value in node.values() for item in objects(value)]
+        if isinstance(node, list):
+            return [item for value in node for item in objects(value)]
+        return []
+
+    assert objects(schema) and all(o["additionalProperties"] is False for o in objects(schema))
+
+
+def test_update_prompts_ask_for_json_entries_not_pipe_lines() -> None:
+    for prompt in (PROMPT_UPDATE_WHO_IS_WHO, PROMPT_UPDATE_WHERE_IS_WHERE):
+        assert 'separated by " | "' not in prompt
+        assert "exactly three fields separated" not in prompt
+        assert '"add"' in prompt and '"update"' in prompt and '"other_names"' in prompt

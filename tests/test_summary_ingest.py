@@ -8,6 +8,7 @@ from test_character_ingest import (
     character,
     extraction,
     make_extraction,
+    split_card_answers,
 )
 
 from pov_retell.infrastructure.llm import LLMError
@@ -18,7 +19,7 @@ def test_ingest_passes_only_preceding_who_is_who_where_is_where_and_chapter_summ
     tmp_path: Path,
 ) -> None:
     make_extraction(tmp_path, [["Mara arrived."], ["Mara met Jo."], ["FUTURE_PERSON arrived."]])
-    summaries = ScriptedLLM(
+    texts, cards = split_card_answers(
         [
             "PAST_CHAPTER_ONE",
             {"add": [{"name": "Mara", "other_names": [], "card": "WHO_AFTER_ONE"}], "update": []},
@@ -93,12 +94,14 @@ def test_ingest_passes_only_preceding_who_is_who_where_is_where_and_chapter_summ
             "FUTURE_CORE_MEMORY",
         ]
     )
+    summaries = ScriptedLLM(texts)
     llm = ScriptedLLM(
         [
             extraction(character("Mara", species="human")),
             extraction(character("Jo")),
             extraction(),
-        ]
+        ],
+        cards=cards,
     )
     writer = RecordingWriter()
     steps: list[str] = []
@@ -159,7 +162,7 @@ def test_ingest_passes_only_preceding_who_is_who_where_is_where_and_chapter_summ
 
 def test_summary_failure_keeps_saved_summaries_and_prevents_extraction(tmp_path: Path) -> None:
     make_extraction(tmp_path, [["Mara arrived."], ["Mara returned."]])
-    summaries = ScriptedLLM(
+    texts, cards = split_card_answers(
         [
             "First summary",
             {"add": [{"name": "Mara", "other_names": [], "card": "traveler"}], "update": []},
@@ -167,7 +170,8 @@ def test_summary_failure_keeps_saved_summaries_and_prevents_extraction(tmp_path:
             LLMError("Summary unavailable"),
         ]
     )
-    llm, writer = ScriptedLLM([]), RecordingWriter()
+    summaries = ScriptedLLM(texts)
+    llm, writer = ScriptedLLM([], cards=cards), RecordingWriter()
     with pytest.raises(LLMError, match="Summary unavailable"):
         ingest_book(
             "sample",

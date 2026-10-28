@@ -250,6 +250,51 @@ def test_where_is_where_accepts_case_insensitive_survival_in_first_or_second_fie
     assert validate_where_is_where(merged, previous) == merged
 
 
+def test_where_is_where_accepts_quote_normalized_survival_malkin_case() -> None:
+    previous = "Madam Malkin’s Robes for All Occasions | Madam Malkin's | robe shop"
+    new_list = "Madam Malkin's Robes for All Occasions | - | robe shop"
+    assert validate_where_is_where(new_list, previous) == new_list
+
+
+def test_where_is_where_accepts_quote_normalized_survival_reverse_case() -> None:
+    previous = "Madam Malkin's Robes for All Occasions | - | robe shop"
+    new_list = "Madam Malkin’s Robes for All Occasions | - | robe shop"
+    assert validate_where_is_where(new_list, previous) == new_list
+
+
+def test_who_is_who_accepts_quote_normalized_apostrophe_and_double_quote() -> None:
+    previous = "O’Brien | - | ministry official\n“Mad-Eye” Moody | - | auror"
+    new_list = 'O\'Brien | - | ministry official\n"Mad-Eye" Moody | - | veteran auror'
+    assert validate_who_is_who(new_list, previous) == new_list
+
+    # Reverse direction
+    reverse_new = "O’Brien | - | ministry official\n“Mad-Eye” Moody | - | veteran auror"
+    assert validate_who_is_who(reverse_new, new_list) == reverse_new
+
+
+def test_running_list_returns_models_original_characters_unmodified() -> None:
+    previous = "Madam Malkin’s Robes | - | shop"
+    new_list = "Madam Malkin's Robes | Diagon Alley's shop | robe shop with “best” robes"
+    result = validate_where_is_where(new_list, previous)
+    assert result == new_list
+    assert "Malkin's" in result
+    assert "“best”" in result
+
+
+def test_running_list_raises_when_entry_truly_missing_even_with_quotes() -> None:
+    previous = "Madam Malkin’s Robes | - | shop\nOllivanders | - | wand shop"
+    new_list = "Madam Malkin's Robes | - | shop"
+    with pytest.raises(ValueError, match=r"WHERE IS WHERE dropped earlier place\(s\): Ollivanders"):
+        validate_where_is_where(new_list, previous)
+
+    who_previous = "O’Brien | - | official\nHarry Potter | - | student"
+    who_new = "O'Brien | - | official"
+    with pytest.raises(
+        ValueError, match=r"WHO IS WHO dropped earlier character\(s\): Harry Potter"
+    ):
+        validate_who_is_who(who_new, who_previous)
+
+
 @pytest.mark.parametrize(
     "forbidden_term",
     [

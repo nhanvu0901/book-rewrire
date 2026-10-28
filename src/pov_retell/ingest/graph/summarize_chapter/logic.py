@@ -48,6 +48,25 @@ def format_previous_context(summaries: Sequence[ChapterSummary]) -> str:
     )
 
 
+_QUOTE_TRANSLATION = str.maketrans(
+    {
+        "’": "'",
+        "‘": "'",
+        "‛": "'",
+        "ʼ": "'",
+        "′": "'",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "″": '"',
+    }
+)
+
+
+def _name_key(text: str) -> str:
+    return " ".join(text.translate(_QUOTE_TRANSLATION).split()).casefold()
+
+
 def _running_list_lines(text: str, label: str) -> list[str]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if lines and lines[0].rstrip(":").strip().casefold() == label.casefold():
@@ -73,8 +92,8 @@ def validate_running_list(
                 f"{label} line must have three non-empty fields separated by '|': {line!r}"
             )
         parsed.append((fields[0], fields[1], fields[2]))
-    surviving_names = {
-        entry.strip().casefold()
+    surviving_keys = {
+        _name_key(entry)
         for first, second, _ in parsed
         for entry in [first, *second.split(",")]
         if entry.strip()
@@ -82,7 +101,7 @@ def validate_running_list(
     previous_names = [
         line.split("|")[0].strip() for line in _running_list_lines(previous_text, label)
     ]
-    missing = [name for name in previous_names if name and name.casefold() not in surviving_names]
+    missing = [name for name in previous_names if name and _name_key(name) not in surviving_keys]
     if missing:
         raise ValueError(f"{label} dropped earlier {item_kind}(s): {', '.join(missing)}")
     return "\n".join(f"{first} | {second} | {third}" for first, second, third in parsed)

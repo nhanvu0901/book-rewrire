@@ -72,15 +72,15 @@ every review is committed.
 | [T-0010](T-0010-pov-graph-slides.md) | HTML slide deck; the user's 8-slide deck replaced Revision 5 | verified | Antigravity (Gemini 4 Argon) | 2026-10-28 |
 | [T-0011](T-0011-remove-scaledown-experiment.md) | Remove the unused ScaleDown experiment and its required setting | verified | Codex (GPT-6) | 2026-10-26 |
 | [T-0012](T-0012-running-list-quote-normalization.md) | Running lists treat straight and curly quotes as the same name | verified | Antigravity (Gemini 4 Argon) | 2026-10-28 |
-| [T-0013](T-0013-running-list-changes-only.md) | WHO IS WHO and WHERE IS WHERE return changes only, merged by a reducer | changes_requested | Antigravity (Gemini 4 Argon) | 2026-10-28 |
+| [T-0013](T-0013-running-list-changes-only.md) | WHO IS WHO and WHERE IS WHERE return changes only; Revision 2 moves card updates to GLM | ready | unassigned | 2026-10-28 |
 
 ## Recommended order
 
 Implement one ticket at a time; T-0004 to T-0008 touch the same graph, pipeline and audit runner.
 
 T-0002 to T-0008 are verified offline (2026-10-25).
-1. T-0013: fix the review findings F1–F4. It was merged into `main` on 2026-10-28 while
-   `changes_requested`; fix it before the next real summary run.
+1. T-0013 Revision 2: card updates on GLM with structured outputs, plus F1–F4. Needed
+   before the next real summary run.
 2. Live check of T-0002 to T-0008 after the extract model is switched to GLM in `.env` and the user gives the OK.
 T-0010 is closed (2026-10-28): the user's own 8-slide deck replaced Revision 5.
 T-0011 (remove ScaleDown) is verified (2026-10-26).

@@ -1,6 +1,6 @@
 # Current Project Context
 
-Updated: 2026-10-27. This is the concise onboarding reference, not a session transcript.
+Updated: 2026-10-29. This is the concise onboarding reference, not a session transcript.
 Read [root AGENTS.md](../AGENTS.md) before acting. Verify mutable settings and source when needed.
 
 ## Goal and Boundaries
@@ -41,6 +41,12 @@ pov ingest <book_id> --no-neo4j
   Python helper (`format_previous_context`) to assemble prior context for chapter N: the `WHO IS WHO`
   and `WHERE IS WHERE` after chapter N-1 plus chapter summaries 1..N-1 in chapter order (each labeled
   with its chapter ID); u01 receives empty context.
+- Although Python has prepared all summaries before extraction begins, each extraction request
+  uses only `state["summaries"][:index]`, the current chapter, and records accumulated through
+  earlier extraction steps. The final `book_memory`/`core_memory` is saved separately and is not
+  passed into the extraction graph. These two stages do not implement whole-book identity
+  resolution followed by per-character belief tracking. Chapter snapshots exist, but there is
+  no structured belief-history model or POV retelling command in the current source.
 - Extraction prompt is changes-only (section "CHANGES ONLY"): the model returns new characters
   and existing ones that appear or gain information, with only new info (null/[] = unchanged,
   each existing ID at most once, `{"characters": []}` if nothing is new). In `T-0003`,
@@ -324,13 +330,57 @@ single-character input did not eliminate them. Read handoffs for exact source/ar
   the revised Sprint 2/3 slides were visually inspected at 1280×720. This context update was
   performed directly because the requested `gpt-5.6-sol` model was unavailable.
 - The current English rehearsal script is
-  [presentation-script-5min.md](../doc/presentation/presentation-script-5min.md): 504 spoken
+  [presentation-script-5min.md](../doc/presentation/presentation-script-5min.md): 480 spoken
   words, an eight-slide schedule totaling 300 seconds, and cues matching each manual reveal.
   The same script is embedded in the HTML speaker notes, opened with N; line breaks preserve
   the cues. Timing is a rehearsal target, not a measured human delivery. No provenance was
   established for the existing percentage badges, so the script does not narrate those figures.
   Browser checks verified all seven First Approach stages, Next/Prev, timed notes for all
   slides, 720p layout, and disabled diagram animation with reduced motion.
+- On 2026-10-28, Sprint 3's small full-body icons became larger top-cropped portraits in
+  side-by-side fact cards (96×128 at 720p, 112×160 at 1080p). The closing slide was reduced
+  to three future goals and one final takeaway, revealed in four manual steps. Its earlier
+  completion percentages and replay row were removed. Next stays enabled until the closing
+  takeaway is revealed, then disables; Prev reverses each step and can return to Sprint 3.
+  The script was trimmed from 504 to 443 words by removing repeated goal statements,
+  overlapping explanations of knowledge, and repeated retelling of the twist. Closing cues
+  now match all four builds; the closing time is 4:25–5:00. Browser checks covered the portrait
+  sizes, layout at 1280×720 and 1920×1080, all closing builds, final-button state, backward
+  navigation, and runtime errors (none observed). Script checks confirmed all eight HTML
+  notes match the spoken paragraphs and the schedule totals 300 seconds. JavaScript syntax
+  and `git diff --check` passed. Context maintenance was performed directly because the
+  requested `gpt-5.6-sol` model was unavailable.
+- On 2026-10-29, slide 7 became "Sprint 3 · Read in Order, Keep Every Version". It shows the
+  real Chapter 16 and Chapter 17 WHO IS WHO versions for Quirrell and Snape, and the
+  chapter-17 relationship Quirrell → Voldemort. The data came from run
+  `run_3579e8d772cb46b59085b48b5c49bd30`. The old chapter-input toggle and its JavaScript are
+  gone. Slides 6 and 7 use the full template prompt word for word. The speaker notes, the
+  `.md` script and `POV_Graph_Ready.docx` no longer claim a whole-book first pass. Chrome
+  checks at 1920×1080 and 1280×720 found no errors, overlaps or scrolling.
+- A further direct request on 2026-10-28 added a Voldemort reveal behind Quirrell on slide 2.
+  The new transparent `assets/characters/voldemort-hover.png` was created with built-in image
+  generation using Quirrell as a style reference; the final prompt is recorded beside the asset
+  in `voldemort-hover.prompt.md`. The reveal uses Quirrell's existing `is-focused` state for
+  pointer hover and keyboard focus. It is layered behind the unchanged Quirrell figure, hides
+  on leave/blur even after selection, and has no pointer events. It does not appear on other
+  slides. This user request supersedes the older ticket's no-Voldemort-art restriction for
+  this interaction. Chrome checks covered hover, leave, keyboard focus/blur, character
+  selection, preserved attribute-card behavior, and viewport bounds at 1920×1080, 1280×720,
+  900×700, and 800×600. Reduced motion disables the reveal transition; runtime errors were
+  not observed. This bounded context update was made directly because the requested
+  context-maintenance model remained unavailable.
+- On 2026-10-29, a source-level fact check corrected slides 6–7 and their spoken script.
+  Slide 6 now labels the Harry/Snape/Quirrell example as a requirement for a future POV
+  narrator. Slide 7 describes the implemented summary-then-extraction stages; its interactive
+  examples show Chapter 16 with summaries 1–15 and Chapter 17 with summaries 1–16, rather
+  than presenting a working belief timeline. Belief tracking and POV retelling are explicitly
+  future work. The large portraits and manual reveal counts remain. The script and all HTML
+  notes are synchronized at 436 spoken words with the existing 300-second schedule.
+  Source evidence: `ingest/pipeline.py`, `extract_character/graph.py` (the previous-summary
+  slice and chapter snapshots), and `extract_character/model.py`. Browser checks covered
+  slides 6–7 at 1280×720/1920×1080, both input examples and backward navigation, with no
+  overflow or observed runtime errors. Application code was not changed. Context maintenance
+  was performed directly because the requested model was unavailable.
 - For a requested real API audit, load [run-ingest-api-audit](skills/run-ingest-api-audit/SKILL.md).
   The initiating model owns the run, analysis, and suggested fixes. Terra observes and escalates.
 - The skill-local runner calls current production graphs, captures HTTP responses before client

@@ -566,6 +566,27 @@
       user-select: none;
     }
 
+    #hero-slot-quirrell .hero-figure-wrap { isolation: isolate; }
+    #hero-slot-quirrell .quirrell-front { position: relative; z-index: 1; }
+    #hero-slot-quirrell .quirrell-reveal {
+      position: absolute;
+      z-index: 0;
+      height: 105%;
+      width: auto;
+      max-width: none;
+      left: 20%;
+      bottom: 15%;
+      opacity: 0;
+      transform: translate(-18px, 18px) scale(0.92);
+      transform-origin: 50% 100%;
+      filter: drop-shadow(0 0 18px rgba(110, 147, 127, 0.35));
+      transition: opacity 0.35s ease, transform 0.45s ease;
+    }
+    #hero-slot-quirrell.is-focused .quirrell-reveal {
+      opacity: 0.96;
+      transform: translate(0, 0) scale(1);
+    }
+
     /* Focus & Hover states on standees */
     .cinematic-hero:not(.is-focused) {
       opacity: 0.9;
@@ -1686,6 +1707,21 @@
     [data-screen="5"] .metric-label { font-size: 12px; line-height: 1.45; letter-spacing: 0; text-transform: none; }
     .pass-column-card.is-current { border-color: var(--purple); }
 
+    .identity-portraits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .identity-portrait-card { display: flex; align-items: center; gap: 12px; padding: 10px; background: #111a24; border: 1px solid var(--border-muted); border-radius: 8px; min-width: 0; }
+    .identity-portrait-card img { width: 112px; height: 160px; object-fit: cover; object-position: center top; border-radius: 6px; flex-shrink: 0; }
+    .identity-portrait-card span { font-size: 16px; line-height: 1.45; color: var(--text-main); }
+
+    [data-screen="8"] .next-screen-layout { justify-content: center; gap: 28px; min-height: 0; }
+    [data-screen="8"] .roadmap-grid { gap: 24px; }
+    [data-screen="8"] .roadmap-card { justify-content: flex-start; min-height: 230px; padding: 32px; border: 1px solid var(--border-muted); border-top: 3px solid var(--accent); }
+    [data-screen="8"] .roadmap-card.is-current { background: #262e35; border-color: var(--accent); }
+    [data-screen="8"] .roadmap-status-badge { align-self: flex-start; background: transparent; border: none; color: var(--accent); padding: 0; letter-spacing: 0.08em; margin-bottom: 24px; }
+    [data-screen="8"] .roadmap-card h3 { font-size: 27px; font-weight: 650; margin-bottom: 12px; }
+    [data-screen="8"] .roadmap-card p { font-size: 18px; color: var(--text-muted); line-height: 1.5; }
+    [data-screen="8"] .takeaway-banner { padding: 28px 32px; border: 1px solid #7d7152; text-align: center; }
+    [data-screen="8"] .takeaway-quote { font-family: var(--font-heading); font-size: 32px; font-weight: 500; margin: 0; }
+
     @media (max-height: 800px) {
       [data-screen="4"] .barrier-screen-layout { padding: 12px 0; gap: 30px; }
       [data-screen="4"] .barrier-core-card { padding: 22px; }
@@ -1701,10 +1737,24 @@
       [data-screen="5"] .metric-card { padding: 10px 14px; }
       [data-screen="5"] .metric-val { min-width: 92px; font-size: 25px; }
       [data-screen="5"] .metric-label { font-size: 12px; }
+      .identity-portrait-card { padding: 8px; gap: 10px; }
+      .identity-portrait-card img { width: 96px; height: 128px; }
+      .identity-portrait-card span { font-size: 15px; }
+      [data-screen="8"] .roadmap-card { min-height: 180px; padding: 24px; }
+      [data-screen="8"] .roadmap-card h3 { font-size: 24px; }
+      [data-screen="8"] .roadmap-card p { font-size: 16px; }
+      [data-screen="8"] .roadmap-status-badge { margin-bottom: 18px; }
+      [data-screen="8"] .takeaway-banner { padding: 22px 24px; }
+      [data-screen="8"] .takeaway-quote { font-size: 28px; }
+    }
+
+    @media (max-width: 1000px) {
+      #hero-slot-quirrell .quirrell-reveal { height: 95%; left: 12%; }
     }
 
     @media (prefers-reduced-motion: reduce) {
       [data-reveal-step] { transition: none; transform: none; }
+      #hero-slot-quirrell .quirrell-reveal { transition: none; }
       .prompt-explosion.is-revealed .approach-page,
       .prompt-explosion.is-revealed .approach-arrow,
       .prompt-explosion.is-revealed .approach-output { animation: none; }
@@ -1777,7 +1827,7 @@
        ======================================================== -->
   <section class="screen" data-screen="2" data-notes="0:20–0:40 · Slide 2: Choose a Point of View.
 
-[Select Harry and briefly hover his card] These characters share a story, but they do not share the same knowledge. I&#x27;ll use Harry today. He can see an event and still misunderstand it. That difference is what the project needs to preserve.
+[Select Harry and briefly hover his card] I&#x27;ll use Harry. Choosing a narrator sets which facts the AI is allowed to use. His view may differ from Hermione&#x27;s, even in the same scene.
 
 [NEXT · Open slide 3]">
     <div class="cinematic-select-stage">
@@ -1856,7 +1906,8 @@
           <div class="hero-magic-ring"></div>
           <div class="hero-ground-shadow"></div>
           <div class="hero-figure-wrap">
-            <img src="assets/characters/quirrell.webp" alt="Professor Quirrell">
+            <img class="quirrell-reveal" src="assets/characters/voldemort-hover.png" alt="" aria-hidden="true">
+            <img class="quirrell-front" src="assets/characters/quirrell.webp" alt="Professor Quirrell">
           </div>
           <div class="hero-label-wrap">
             <span class="hero-name-text">Prof. Quirrell</span>
@@ -1905,15 +1956,15 @@
   <!-- ========================================================
        SLIDE 3: SPRINT 1 (DRAW.IO GRAPH - CLEAN NO COLONS)
        ======================================================== -->
-  <section class="screen" data-screen="3" data-notes="0:40–1:30 · Slide 3: Sprint 1.
+  <section class="screen" data-screen="3" data-notes="0:40–1:25 · Slide 3: Sprint 1.
 
-[Step 1/4 · People and relationships] Sprint one was the graph design. We start with people and the relationships between them.
+[Step 1/4 · People and relationships] Sprint one was the graph design. Start with people and the relationships between them.
 
-[NEXT · Step 2/4 · Events and locations] Next, we record events and locations: what happened, who was there, and where.
+[NEXT · Step 2/4 · Events and locations] Add events and locations: what happened, who was there, and where.
 
-[NEXT · Step 3/4 · Utterance and claim] Then we separate what someone says from whether it is true. A claim is something a character might believe.
+[NEXT · Step 3/4 · Utterance and claim] Then store what was said as a claim. A character can believe that claim before it is confirmed.
 
-[NEXT · Step 4/4 · Knowledge acquisition] Finally, we record how a character learns that claim. Hearing something, seeing something, and knowing it are different. This structure lets us track both the story and a person&#x27;s limited understanding of it.
+[NEXT · Step 4/4 · Knowledge acquisition] Finally, record the source of a belief: an event the character witnessed or a report they heard.
 
 [NEXT · Open slide 4]">
     <h1 class="t-title">Sprint 1</h1>
@@ -2099,21 +2150,21 @@
   <!-- ========================================================
        SLIDE 4: SPRINT 2 (PART 1) — THE BARRIER / CHALLENGE
        ======================================================== -->
-  <section class="screen" data-screen="4" data-notes="1:30–2:15 · Slide 4: Sprint 2 · Too Much at Once.
+  <section class="screen" data-screen="4" data-notes="1:25–2:10 · Slide 4: Sprint 2 · Too Much at Once.
 
-[Step 1/7 · First approach] In sprint two, our first approach was one prompt for everything.
+[Step 1/7 · First approach] In sprint two, we tried one prompt for everything.
 
-[NEXT · Step 2/7 · Chapter input and diagram] We gave it a whole chapter, around six thousand words.
+[NEXT · Step 2/7 · Chapter input and diagram] We sent a whole chapter, around six thousand words.
 
-[NEXT · Step 3/7 · Everything asked of the AI] We asked for people, feelings, relationships, and scenes in one large answer.
+[NEXT · Step 3/7 · Everything asked of the AI] It had to find people, feelings, relationships, and scenes.
 
-[NEXT · Step 4/7 · Invented connections] It sometimes invented connections between people who had not spoken.
+[NEXT · Step 4/7 · Invented connections] It invented interactions between people who had never spoken.
 
-[NEXT · Step 5/7 · Missing people] It also missed less prominent characters.
+[NEXT · Step 5/7 · Missing people] Less prominent characters were left out.
 
-[NEXT · Step 6/7 · Failed output] A cut-off answer or broken format could stop the whole job.
+[NEXT · Step 6/7 · Failed output] Broken JSON or a cut-off answer could stop the whole job.
 
-[NEXT · Step 7/7 · Takeaway] Because everything came back together, we struggled to locate the failure.
+[NEXT · Step 7/7 · Takeaway] We needed a way to find the failing step.
 
 [NEXT · Open slide 5]">
     <h1 class="t-title">Sprint 2 · Too Much at Once</h1>
@@ -2183,21 +2234,21 @@
   <!-- ========================================================
        SLIDE 5: SPRINT 2 (PART 2) — HOW WE OVERCAME IT
        ======================================================== -->
-  <section class="screen" data-screen="5" data-notes="2:15–3:10 · Slide 5: Sprint 2 · One Job at a Time.
+  <section class="screen" data-screen="5" data-notes="2:10–3:00 · Slide 5: Sprint 2 · One Job at a Time.
 
-[Step 1/7 · Find people] We changed the workflow so each step has one clear job. First, find new people and update existing ones.
+[Step 1/7 · Find people] The new workflow separates those jobs. First, identify characters and update their records.
 
-[NEXT · Step 2/7 · Check the answer] Second, check that the answer has the required fields and data types.
+[NEXT · Step 2/7 · Check the answer] Pydantic checks that the answer has the expected fields and types.
 
-[NEXT · Step 3/7 · Find connections] Third, find relationships and connect them to evidence in the text.
+[NEXT · Step 3/7 · Find connections] Extract relationships with evidence from the chapter.
 
-[NEXT · Step 4/7 · Place the scenes] Fourth, record who was in each scene, where, and in what order.
+[NEXT · Step 4/7 · Place the scenes] Record who was in each scene, where, and in what order.
 
-[NEXT · Step 5/7 · Save the result] Fifth, save the checked result to Neo4j.
+[NEXT · Step 5/7 · Save the result] Save the checked result to Neo4j.
 
-[NEXT · Step 6/7 · Trace] LangGraph controls the sequence. LangSmith records the prompts, answers, and errors so we can investigate a specific step.
+[NEXT · Step 6/7 · Trace] LangGraph controls the order. LangSmith lets us inspect the prompt, response, and error for each call.
 
-[NEXT · Step 7/7 · Results] These checks help, but correct formatting alone does not prove a story fact is correct.
+[NEXT · Step 7/7 · Results] A valid format is only the first check; the story facts still need review.
 
 [NEXT · Open slide 6]">
     <h1 class="t-title">Sprint 2 · One Job at a Time</h1>
@@ -2285,23 +2336,23 @@
   <!-- ========================================================
        SLIDE 6: SPRINT 3 (PART 1) — THE SURPRISE
        ======================================================== -->
-  <section class="screen" data-screen="6" data-notes="3:10–3:55 · Slide 6: Sprint 3 · Harry Does Not Know Yet.
+  <section class="screen" data-screen="6" data-notes="3:00–3:45 · Slide 6: Sprint 3 · A Future POV Challenge.
 
-[Step 1/4 · Harry&#x27;s suspicion] Sprint three exposed a different problem. Before the reveal, Harry suspects Snape of trying to steal the Stone.
+[Step 1/4 · Harry&#x27;s suspicion] This story illustrates a requirement for our future narrator. In chapter sixteen, Harry still suspects Snape.
 
-[NEXT · Step 2/4 · The clues] He sees an injured leg, hears about Snape muttering during Quidditch, and overhears him confronting Quirrell. Harry connects those clues in the wrong way.
+[NEXT · Step 2/4 · The clues] His clues include Snape&#x27;s injured leg, the Quidditch match, and his confrontation with Quirrell.
 
-[NEXT · Step 3/4 · Quirrell appears] In the final chamber, he finds Quirrell instead.
+[NEXT · Step 3/4 · Quirrell appears] In chapter seventeen, he finds Quirrell in the final chamber.
 
-[NEXT · Step 4/4 · What Harry learns] He then learns that Voldemort was hiding in Quirrell, while Snape had been protecting him. An AI that already knows this ending could accidentally spoil an earlier Harry scene.
+[NEXT · Step 4/4 · The future requirement] Harry learns that Voldemort was hiding in Quirrell and Snape was protecting him. If the AI read the whole book at once, it could leak chapter seventeen into a chapter sixteen retelling. A future narrator must use only what Harry knows at the chosen point in the story.
 
 [NEXT · Open slide 7]">
-    <h1 class="t-title">Sprint 3 · Harry Does Not Know Yet</h1>
+    <h1 class="t-title">Sprint 3 · A Future POV Challenge</h1>
     <div class="prompt-banner">
       <span class="prompt-label mono">PROMPT:</span>
-      <span class="t-caption">What's something surprising that happened during the process?</span>
+      <span class="t-caption">What's a diversion you took, or something surprising that happened during the process?</span>
     </div>
-    <p class="answer-line">An AI that knows the ending can spoil an earlier scene.</p>
+    <p class="answer-line">A future narrator must separate Harry's belief from the story's facts.</p>
 
     <div class="twist-screen-layout">
       <!-- Left: Chapter 1-16 Red Herring -->
@@ -2354,7 +2405,7 @@
         </div>
 
         <div data-reveal-step="4" style="padding: 14px; background: rgba(0,0,0,0.5); border-radius: 12px; border: 1px solid var(--purple);">
-          <span class="t-caption" style="color: #e9d5ff;">Harry learns this later. His earlier self must not know it yet.</span>
+          <span class="t-caption" style="color: #e9d5ff;">Future POV requirement: use only what Harry knows at that point.</span>
         </div>
       </div>
     </div>
@@ -2363,73 +2414,76 @@
   <!-- ========================================================
        SLIDE 7: SPRINT 3 (PART 2) — THE DIVERSION
        ======================================================== -->
-  <section class="screen" data-screen="7" data-notes="3:55–4:40 · Slide 7: Sprint 3 · Keep Both Views.
+  <section class="screen" data-screen="7" data-notes="3:45–4:25 · Slide 7: Sprint 3 · Read in Order, Keep Every Version.
 
-[Step 1/3 · Story facts] Our design uses two readings. First, read the whole book to resolve names and identities, including late revelations.
+[Step 1/3 · Chapter 16 version] To handle the twist, we read the book in order and save memory for every chapter. In the chapter sixteen version, Quirrell is just a nervous teacher, and Snape is the one Harry suspects.
 
-[NEXT · Step 2/3 · Harry&#x27;s Chapter 16 view] Then follow the chapters in order and record what the character knows. In chapter sixteen, Harry still suspects Snape. That belief matters to his narration, even though it is wrong.
+[NEXT · Step 2/3 · Chapter 17 version] In chapter seventeen, the reveal updates the records: Voldemort was sharing Quirrell&#x27;s body, and Snape had been protecting Harry.
 
-[NEXT · Step 3/3 · Chapter 17 changes his knowledge] Chapter seventeen adds what he learns about Quirrell and Voldemort. We keep the earlier belief for earlier scenes. The narrator should receive the knowledge available at the chosen point in the story.
+[NEXT · Step 3/3 · Why both versions matter] We keep both versions, so a chapter sixteen retelling only uses the chapter sixteen version. The next step is to track what each character knows, not just what the story has shown so far.
 
 [NEXT · Open slide 8]">
-    <h1 class="t-title">Sprint 3 · Keep Both Views</h1>
+    <h1 class="t-title">Sprint 3 · Read in Order, Keep Every Version</h1>
     <div class="prompt-banner">
       <span class="prompt-label mono">PROMPT:</span>
-      <span class="t-caption">What's a diversion you took, or something surprising that happened?</span>
+      <span class="t-caption">What's a diversion you took, or something surprising that happened during the process?</span>
     </div>
-    <p class="answer-line">Our design separates the story's facts from what Harry knows at each point.</p>
+    <p class="answer-line">We build memory chapter by chapter and keep every version.</p>
 
     <div class="diversion-screen-layout">
-      <!-- Two Pass Architecture Card -->
       <div class="two-pass-stage-card">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <span class="hud-badge mono" style="background: var(--purple-bg); border-color: var(--purple); color: var(--purple);">TWO PASSES</span>
-            <span class="t-body" style="font-size: 18px; font-weight: 700;">Two readings, two different jobs</span>
+            <span class="hud-badge mono" style="background: var(--purple-bg); border-color: var(--purple); color: var(--purple);">CURRENT PIPELINE</span>
+            <span class="t-body" style="font-size: 18px; font-weight: 700;">Read in order. Save memory for every chapter.</span>
           </div>
-          <span class="t-caption" style="color: var(--text-muted);">A design for tracking knowledge</span>
+          <span class="t-caption" style="color: var(--text-muted);">From a real Harry Potter run</span>
         </div>
 
         <div class="two-pass-grid">
-          <!-- Pass 1 -->
+          <!-- Chapter 16 version -->
           <div class="pass-column-card" data-reveal-step="1">
             <div class="pass-col-header">
-              <span>1 · STORY FACTS</span>
-              <span class="hud-badge mono" style="font-size: 11px;">WHO IS WHO</span>
+              <span>CHAPTER 16 VERSION</span>
+              <span class="hud-badge mono" style="font-size: 11px;">BEFORE THE REVEAL</span>
             </div>
-            <p class="t-caption" style="color: #cbd5e1; margin-bottom: 14px;">Read the whole book to connect names and identities, including those revealed near the end.</p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                <img src="assets/characters/quirrell.webp" alt="Quirrell" style="width: 32px; height: 32px; border-radius: 50%;">
-                <span style="font-size: 16px; color: #fff;">Quirrell is hiding Voldemort.</span>
+            <p class="t-caption" style="color: #cbd5e1; margin-bottom: 14px;">Memory saved after Chapter 16.</p>
+            <div class="identity-portraits">
+              <div class="identity-portrait-card">
+                <img src="assets/characters/quirrell.webp" alt="Quirrell">
+                <span>Nervous teacher who stammers.</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                <img src="assets/characters/snape.webp" alt="Snape" style="width: 32px; height: 32px; border-radius: 50%;">
-                <span style="font-size: 16px; color: #fff;">Snape was protecting Harry.</span>
+              <div class="identity-portrait-card">
+                <img src="assets/characters/snape.webp" alt="Snape">
+                <span>Harry believes Snape will go through the trapdoor.</span>
               </div>
             </div>
           </div>
 
-          <!-- Pass 2 -->
+          <!-- Chapter 17 version -->
           <div class="pass-column-card" data-reveal-step="2">
             <div class="pass-col-header">
-              <span>2 · HARRY'S VIEW</span>
-              <span class="hud-badge mono" style="font-size: 11px;">WHEN THEY LEARN IT</span>
+              <span>CHAPTER 17 VERSION</span>
+              <span class="hud-badge mono" style="font-size: 11px;">AFTER THE REVEAL</span>
             </div>
-            <p class="t-caption" style="color: #cbd5e1; margin-bottom: 14px;">Go through the chapters in order. Record what Harry believes, and when new information changes his mind.</p>
-            <div id="timeline-display-box" style="display: flex; flex-direction: column; gap: 10px;">
-              <!-- Dynamic content updated by JS -->
+            <p class="t-caption" style="color: #cbd5e1; margin-bottom: 14px;">The reveal updates the records.</p>
+            <div class="identity-portraits">
+              <div class="identity-portrait-card">
+                <img src="assets/characters/quirrell.webp" alt="Quirrell">
+                <span>Voldemort shares his body.</span>
+              </div>
+              <div class="identity-portrait-card">
+                <img src="assets/characters/snape.webp" alt="Snape">
+                <span>Snape was protecting Harry.</span>
+              </div>
             </div>
+            <p class="t-caption" style="color: var(--text-muted); margin-top: 12px;">New relationship: Quirrell → Voldemort, "servant of", from Chapter 17.</p>
           </div>
         </div>
 
-        <!-- Interactive Timeline Horizon Switcher -->
-        <div class="timeline-toggle-box" data-reveal-step="2">
-          <span class="t-body" style="font-size: 17px; font-weight: 700;">Harry's knowledge at this point:</span>
-          <div style="display: flex; gap: 12px;">
-            <button type="button" class="btn-timeline-choice active" id="btn-ch16" onclick="selectTimelineChapter(16)">Chapter 16: Trapdoor</button>
-            <button type="button" class="btn-timeline-choice" id="btn-ch17" onclick="selectTimelineChapter(17)">Chapter 17: Mirror Room</button>
-          </div>
+        <div class="timeline-toggle-box" data-reveal-step="3">
+          <span class="t-body" style="font-size: 17px; font-weight: 700;">A Chapter 16 retelling reads the Chapter 16 version.</span>
+          <span class="t-caption" style="color: var(--text-muted);">Next: track what each character knows.</span>
         </div>
       </div>
     </div>
@@ -2438,84 +2492,42 @@
   <!-- ========================================================
        SLIDE 8: WHAT'S NEXT FOR ME
        ======================================================== -->
-  <section class="screen" data-screen="8" data-notes="4:40–5:00 · Slide 8: What&#x27;s Next for Me.
+  <section class="screen" data-screen="8" data-notes="4:25–5:00 · Slide 8: What&#x27;s Next for Me.
 
-[Closing slide · No further advance] Next, I will test complete books and the full series, improve extraction, and build the POV narrator. The main lesson: a character&#x27;s knowledge changes over time, and the graph must preserve that. Thank you.">
+[Step 1/4 · Test whole books] Next, test the pipeline across complete books and the full series.
+
+[NEXT · Step 2/4 · Improve accuracy] Review identity matches, relationships, and the source evidence.
+
+[NEXT · Step 3/4 · Build POV narrators] Then build a narrator that receives only the chosen character&#x27;s knowledge.
+
+[NEXT · Step 4/4 · Closing lesson] That&#x27;s the lesson I want to carry forward: the graph must preserve a character&#x27;s changing understanding. Thank you.">
     <h1 class="t-title">What's Next for Me</h1>
     <div class="prompt-banner">
       <span class="prompt-label mono">PROMPT:</span>
       <span class="t-caption">Where are you taking this project from here? What did this experience teach you?</span>
     </div>
-    <p class="answer-line">Next: ingest the full series and build autonomous, multi-agent POV narrators.</p>
+    <p class="answer-line">Next: test, improve, then retell.</p>
 
     <div class="next-screen-layout">
-      <!-- Big Core Takeaway Banner -->
-      <div class="takeaway-banner">
-        <div class="takeaway-quote">"Model what characters know, not just where they were."</div>
-        <div class="takeaway-sub">A POV subgraph keeps later revelations out of an earlier scene, so the retelling stays true to what the character knew.</div>
-      </div>
-
-      <!-- 3-Milestone Roadmap Grid -->
       <div class="roadmap-grid">
-        <!-- Milestone 1 -->
-        <div class="roadmap-card">
-          <div>
-            <div class="roadmap-status-badge" style="background: var(--success-bg); color: var(--success); border: 1px solid var(--success);">
-              MILESTONE 1 · COMPLETE
-            </div>
-            <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 8px;">Epistemic Graph & Pipeline</h3>
-            <p class="t-caption" style="color: #cbd5e1; line-height: 1.5;">
-              Neo4j schema separating reality from perception; 5-stage modular LangGraph with LangSmith audit tracing.
-            </p>
-          </div>
-          <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-            <span class="mono" style="font-size: 13px; color: var(--success);">✔ 100% Verified in Competition</span>
-          </div>
+        <div class="roadmap-card" data-reveal-step="1">
+          <div class="roadmap-status-badge">01 · TEST</div>
+          <h3>Test whole books</h3>
+          <p>Run the pipeline across the full series.</p>
         </div>
-
-        <!-- Milestone 2 -->
-        <div class="roadmap-card active-lane">
-          <div>
-            <div class="roadmap-status-badge" style="background: rgba(250, 204, 21, 0.15); color: var(--accent); border: 1px solid var(--accent);">
-              MILESTONE 2 · IN PROGRESS
-            </div>
-            <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 8px;">Full-Series Ingestion</h3>
-            <p class="t-caption" style="color: #cbd5e1; line-height: 1.5;">
-              Scaling from single chapters to full 7-volume series ingestion with cross-book identity resolution and continuous memory.
-            </p>
-          </div>
-          <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-            <span class="mono" style="font-size: 13px; color: var(--accent);">⚡ 70% Active Testing</span>
-          </div>
+        <div class="roadmap-card" data-reveal-step="2">
+          <div class="roadmap-status-badge">02 · IMPROVE</div>
+          <h3>Improve accuracy</h3>
+          <p>Check identities, relationships, and evidence.</p>
         </div>
-
-        <!-- Milestone 3 -->
-        <div class="roadmap-card">
-          <div>
-            <div class="roadmap-status-badge" style="background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple);">
-              MILESTONE 3 · PLANNED
-            </div>
-            <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 8px;">Autonomous POV Reteller</h3>
-            <p class="t-caption" style="color: #cbd5e1; line-height: 1.5;">
-              Generative agent conditioned directly on character subgraphs to write original narrative prose in any authentic persona.
-            </p>
-          </div>
-          <div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-            <span class="mono" style="font-size: 13px; color: var(--purple);">🔮 Future Capstone</span>
-          </div>
+        <div class="roadmap-card" data-reveal-step="3">
+          <div class="roadmap-status-badge">03 · RETELL</div>
+          <h3>Build POV narrators</h3>
+          <p>Write from what the character knows.</p>
         </div>
       </div>
-
-      <!-- Quick Replay Bar -->
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: rgba(8, 14, 26, 0.9); border: 1px solid var(--border-muted); border-radius: 14px;">
-        <span class="t-caption mono" style="color: var(--text-muted);">Replay presentation through another lens:</span>
-        <div style="display: flex; gap: 10px;">
-          <button type="button" class="btn-pill" onclick="selectHero('harry'); goToScreen(2)">Harry</button>
-          <button type="button" class="btn-pill" onclick="selectHero('hermione'); goToScreen(2)">Hermione</button>
-          <button type="button" class="btn-pill" onclick="selectHero('ron'); goToScreen(2)">Ron</button>
-          <button type="button" class="btn-pill" onclick="selectHero('quirrell'); goToScreen(2)">Quirrell</button>
-
-        </div>
+      <div class="takeaway-banner" data-reveal-step="4">
+        <div class="takeaway-quote">"Model what characters know, not just where they were."</div>
       </div>
     </div>
   </section>
@@ -2624,8 +2636,7 @@
       selectedHero: "harry",
       graphBuildStep: 1,
       presentationBuildStep: 1,
-      notesOpen: false,
-      timelineChapter: 16
+      notesOpen: false
     };
 
     // ==================== SCREEN NAVIGATION ====================
@@ -2933,7 +2944,6 @@
       document.getElementById("hud-progress-fill").style.width = `${fillPct}%`;
 
       document.getElementById("btn-prev").disabled = state.currentScreen === 1;
-      document.getElementById("btn-next").disabled = state.currentScreen === state.totalScreens;
       if (state.currentScreen === 3) renderGraphBuild();
       renderPresentationBuild();
       if (state.currentScreen === 2) {
@@ -3020,12 +3030,14 @@
       document.getElementById("graph-step-caption").textContent = `${state.graphBuildStep} / ${graphBuildSteps.length} · ${current.label}`;
     }
 
-    const presentationBuildCounts = { 4: 7, 5: 7, 6: 4, 7: 3 };
+    const presentationBuildCounts = { 4: 7, 5: 7, 6: 4, 7: 3, 8: 4 };
 
     function renderPresentationBuild() {
       const total = presentationBuildCounts[state.currentScreen];
       const progress = document.getElementById("progress-label");
       progress.textContent = total ? `STEP ${state.presentationBuildStep}/${total}` : "PROGRESS";
+      document.getElementById("btn-next").disabled = state.currentScreen === state.totalScreens
+        && (!total || state.presentationBuildStep === total);
       if (!total) return;
 
       const screen = document.querySelector(`.screen[data-screen="${state.currentScreen}"]`);
@@ -3037,45 +3049,6 @@
         el.setAttribute("aria-hidden", String(!shown));
         el.inert = !shown;
       });
-      if (state.currentScreen === 7) {
-        setTimelineHorizon(state.presentationBuildStep === 3 ? 17 : 16);
-      }
-    }
-
-    function selectTimelineChapter(chapter) {
-      state.presentationBuildStep = chapter === 17 ? 3 : 2;
-      renderPresentationBuild();
-    }
-
-    // ==================== SLIDE 7: TIMELINE HORIZON TOGGLE ====================
-    function setTimelineHorizon(chapter) {
-      state.timelineChapter = chapter;
-      document.getElementById("btn-ch16").classList.toggle("active", chapter === 16);
-      document.getElementById("btn-ch17").classList.toggle("active", chapter === 17);
-
-      const box = document.getElementById("timeline-display-box");
-      if (chapter === 16) {
-        box.innerHTML = `
-          <div style="padding: 10px 14px; background: rgba(244, 63, 94, 0.15); border: 1.5px solid var(--danger); border-radius: 8px;">
-            <div style="font-size: 16px; color: var(--danger); font-weight: 700;">Harry believes: "Snape wants the Stone."</div>
-            <div style="font-size: 14px; color: #fecdd3; margin-top: 4px;">This is his belief before the reveal, even though it is wrong.</div>
-          </div>
-          <div style="padding: 10px 14px; background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 8px;">
-            <div style="font-size: 14px; color: var(--text-muted);">Quirrell's secret: Harry does not know it yet.</div>
-          </div>
-        `;
-      } else {
-        box.innerHTML = `
-          <div style="padding: 10px 14px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; opacity: 0.7;">
-            <div style="font-size: 15px; color: #94a3b8;">Earlier belief: "Snape wants the Stone."</div>
-            <div style="font-size: 14px; color: #94a3b8; margin-top: 4px;">Kept for earlier scenes. Harry no longer believes it.</div>
-          </div>
-          <div style="padding: 10px 14px; background: var(--success-bg); border: 1.5px solid var(--success); border-radius: 8px;">
-            <div style="font-size: 16px; color: var(--success); font-weight: 700;">Harry learns: Quirrell was hiding Voldemort.</div>
-            <div style="font-size: 14px; color: #a7f3d0; margin-top: 4px;">This knowledge becomes available in Chapter 17.</div>
-          </div>
-        `;
-      }
     }
 
     // ==================== KEYBOARD NAVIGATION ====================
@@ -3112,7 +3085,6 @@
         });
       });
       renderScreen();
-      setTimelineHorizon(16);
     });
 
     window.addEventListener("resize", () => {

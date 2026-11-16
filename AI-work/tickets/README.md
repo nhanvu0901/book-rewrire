@@ -75,6 +75,7 @@ every review is committed.
 | [T-0013](T-0013-running-list-changes-only.md) | WHO IS WHO and WHERE IS WHERE return changes only; Revision 2 moves card updates to GLM | done | Claude (at the user's request) | 2026-10-28 |
 | [T-0014](T-0014-transient-retry.md) | Retry overloaded or unreachable providers with exponential backoff | done | Claude (at the user's request) | 2026-10-28 |
 | [T-0015](T-0015-neo4j-graph-per-chapter.md) | Write the story graph to Neo4j after each chapter | done | Claude (at the user's request) | 2026-11-16 |
+| [T-0016](T-0016-events-claims.md) | Extract events, utterances and claims per chapter | done | Claude (at the user's request) | 2026-11-16 |
 
 ## Recommended order
 

@@ -44,6 +44,9 @@ KEYS = {
     "Character": ("character_id",),
     "Location": ("location_id",),
     "Scene": ("segment_id",),
+    "Claim": ("claim_id",),
+    "Event": ("event_id",),
+    "Utterance": ("utterance_id",),
 }
 
 CHARACTER_PROPERTIES = (
@@ -122,6 +125,84 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (s:Scene {book_id: $book_id, run_id: $run_id, segment_id: row.segment_id}), "
     "(c:Character {book_id: $book_id, run_id: $run_id, character_id: cid}) "
     "MERGE (c)-[:MENTIONED_IN]->(s)",
+    # Claims
+    "UNWIND $claims AS row "
+    "MERGE (c:Claim {book_id: $book_id, run_id: $run_id, claim_id: row.claim_id}) "
+    "SET c.statement = row.statement, c.truth = row.truth, "
+    "c.first_chapter_id = row.first_chapter_id, c.truth_chapter_id = row.truth_chapter_id, "
+    "c.truth_paragraph_ids = row.truth_paragraph_ids",
+    "MATCH (c:Claim {book_id: $book_id, run_id: $run_id}) "
+    "WHERE NOT c.claim_id IN [row IN $claims | row.claim_id] "
+    "DETACH DELETE c",
+    "MATCH (:Claim {book_id: $book_id, run_id: $run_id})-[e:CONCERNS]->() DELETE e",
+    "UNWIND $claims AS row UNWIND row.about_ids AS cid "
+    "MATCH (c:Claim {book_id: $book_id, run_id: $run_id, claim_id: row.claim_id}), "
+    "(p:Character {book_id: $book_id, run_id: $run_id, character_id: cid}) "
+    "MERGE (c)-[:CONCERNS]->(p)",
+    # Events
+    "UNWIND $events AS row "
+    "MERGE (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}) "
+    "SET e.chapter_id = row.chapter_id, e.segment_id = row.segment_id, e.order = row.order, "
+    "e.summary = row.summary, e.paragraph_ids = row.paragraph_ids",
+    "MATCH (e:Event {book_id: $book_id, run_id: $run_id}) "
+    "WHERE NOT e.event_id IN [row IN $events | row.event_id] "
+    "DETACH DELETE e",
+    "MATCH (:Event {book_id: $book_id, run_id: $run_id})-[e:IN_SCENE|OCCURRED_AT|HAS_CLAIM]->() "
+    "DELETE e",
+    "MATCH (:Character {book_id: $book_id, run_id: $run_id})-[e:PARTICIPATED_IN]->() DELETE e",
+    "UNWIND $events AS row "
+    "MATCH (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}), "
+    "(s:Scene {book_id: $book_id, run_id: $run_id, segment_id: row.segment_id}) "
+    "MERGE (e)-[:IN_SCENE]->(s)",
+    "UNWIND $events AS row WITH row WHERE row.location_id IS NOT NULL "
+    "MATCH (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}), "
+    "(l:Location {book_id: $book_id, run_id: $run_id, location_id: row.location_id}) "
+    "MERGE (e)-[:OCCURRED_AT]->(l)",
+    "UNWIND $events AS row UNWIND row.participant_ids AS cid "
+    "MATCH (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}), "
+    "(c:Character {book_id: $book_id, run_id: $run_id, character_id: cid}) "
+    "MERGE (c)-[:PARTICIPATED_IN]->(e)",
+    "UNWIND $events AS row UNWIND row.claim_ids AS claim_id "
+    "MATCH (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}), "
+    "(c:Claim {book_id: $book_id, run_id: $run_id, claim_id: claim_id}) "
+    "MERGE (e)-[:HAS_CLAIM]->(c)",
+    # Utterances
+    "UNWIND $utterances AS row "
+    "MERGE (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}) "
+    "SET u.chapter_id = row.chapter_id, u.segment_id = row.segment_id, u.order = row.order, "
+    "u.mode = row.mode, u.quote = row.quote, u.paragraph_ids = row.paragraph_ids",
+    "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id}) "
+    "WHERE NOT u.utterance_id IN [row IN $utterances | row.utterance_id] "
+    "DETACH DELETE u",
+    "MATCH (:Utterance {book_id: $book_id, run_id: $run_id})-[e:IN_SCENE|ADDRESSED_TO|ASSERTS]->() "
+    "DELETE e",
+    "MATCH (:Character {book_id: $book_id, run_id: $run_id})-[e:SAID]->() DELETE e",
+    "UNWIND $utterances AS row "
+    "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}), "
+    "(s:Scene {book_id: $book_id, run_id: $run_id, segment_id: row.segment_id}) "
+    "MERGE (u)-[:IN_SCENE]->(s)",
+    "UNWIND $utterances AS row WITH row WHERE row.speaker_id IS NOT NULL "
+    "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}), "
+    "(c:Character {book_id: $book_id, run_id: $run_id, character_id: row.speaker_id}) "
+    "MERGE (c)-[:SAID]->(u)",
+    "UNWIND $utterances AS row UNWIND row.addressee_ids AS cid "
+    "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}), "
+    "(c:Character {book_id: $book_id, run_id: $run_id, character_id: cid}) "
+    "MERGE (u)-[:ADDRESSED_TO]->(c)",
+    "UNWIND $utterances AS row UNWIND row.claim_ids AS claim_id "
+    "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}), "
+    "(c:Claim {book_id: $book_id, run_id: $run_id, claim_id: claim_id}) "
+    "MERGE (u)-[:ASSERTS]->(c)",
+)
+
+SNAPSHOT_LISTS = (
+    "characters",
+    "locations",
+    "relationships",
+    "scenes",
+    "claims",
+    "events",
+    "utterances",
 )
 
 
@@ -163,10 +244,7 @@ class Neo4jGraphWriter:
             "run_id": run_id,
             "chapter_id": snapshot["chapter_id"],
             "chapters_done": snapshot["chapters_done"],
-            "characters": snapshot["characters"],
-            "locations": snapshot["locations"],
-            "relationships": snapshot["relationships"],
-            "scenes": snapshot["scenes"],
+            **{name: snapshot.get(name, []) for name in SNAPSHOT_LISTS},
         }
 
         def write(tx: ManagedTransaction) -> None:

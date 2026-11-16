@@ -156,3 +156,74 @@ def test_chapter_writes_are_idempotent_scoped_by_run_and_follow_merges() -> None
             ]
         finally:
             driver.execute_query("MATCH (n {book_id: $book_id}) DETACH DELETE n", book_id=book_id)
+
+
+@pytest.mark.neo4j
+def test_events_utterances_and_claims_are_linked() -> None:
+    book_id = f"test_events_{uuid4().hex}"
+    mara = character_row("char_001", "Mara", None)
+    jo = character_row("char_002", "Jo", None)
+    data = snapshot(
+        1,
+        [mara, jo],
+        [scene_row("u01_s1", 1, ["char_001", "char_002"], [])],
+    )
+    data["claims"] = [
+        {
+            "claim_id": "claim_001",
+            "statement": "Jo stole the key",
+            "about_ids": ["char_002"],
+            "truth": "unknown",
+            "first_chapter_id": "u01",
+            "truth_chapter_id": None,
+            "truth_paragraph_ids": [],
+        }
+    ]
+    data["events"] = [
+        {
+            "event_id": "u01_e1",
+            "chapter_id": "u01",
+            "order": 1,
+            "segment_id": "u01_s1",
+            "location_id": "loc_001",
+            "summary": "Mara finds the door open",
+            "participant_ids": ["char_001"],
+            "paragraph_ids": ["u01_p001"],
+            "claim_ids": ["claim_001"],
+        }
+    ]
+    data["utterances"] = [
+        {
+            "utterance_id": "u01_q1",
+            "chapter_id": "u01",
+            "order": 1,
+            "segment_id": "u01_s1",
+            "mode": "spoken",
+            "speaker_id": "char_001",
+            "addressee_ids": ["char_002"],
+            "quote": "Jo took the key",
+            "paragraph_ids": ["u01_p001"],
+            "claim_ids": ["claim_001"],
+        }
+    ]
+    with connect(Settings()) as driver:  # type: ignore[call-arg]
+        writer = Neo4jGraphWriter(driver)
+        try:
+            writer.start_run(book_id, "run_a", "The Gate", ["u01"])
+            writer.write_chapter(book_id, "run_a", data)
+            writer.write_chapter(book_id, "run_a", data)
+            records, _, _ = driver.execute_query(
+                "MATCH (m:Character {book_id: $book_id, character_id: 'char_001'})"
+                "-[:SAID]->(u:Utterance)-[:ASSERTS]->(c:Claim)-[:CONCERNS]->(j:Character), "
+                "(u)-[:ADDRESSED_TO]->(j), (u)-[:IN_SCENE]->(s:Scene), "
+                "(m)-[:PARTICIPATED_IN]->(e:Event)-[:HAS_CLAIM]->(c), "
+                "(e)-[:OCCURRED_AT]->(l:Location), (e)-[:IN_SCENE]->(s) "
+                "RETURN j.canonical_name AS about, c.truth AS truth, l.name AS place, "
+                "count(*) AS paths",
+                book_id=book_id,
+            )
+            assert [dict(r) for r in records] == [
+                {"about": "Jo", "truth": "unknown", "place": "the gate", "paths": 1}
+            ]
+        finally:
+            driver.execute_query("MATCH (n {book_id: $book_id}) DETACH DELETE n", book_id=book_id)

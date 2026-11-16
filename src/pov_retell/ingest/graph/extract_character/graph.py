@@ -6,6 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from pov_retell.infrastructure.llm import JsonLLM
 from pov_retell.ingest.graph.extract_character import (
+    events,
     location,
     logic,
     relationship,
@@ -16,7 +17,7 @@ from pov_retell.ingest.graph.extract_character.model import ExtractCharacterStat
 from pov_retell.ingest.graph.summarize_chapter.logic import format_previous_context
 from pov_retell.ingest.model import GraphWriter
 
-EXTRACT_NODES_PER_CHAPTER = 10
+EXTRACT_NODES_PER_CHAPTER = 12
 
 
 def extract_character_recursion_limit(chapter_count: int) -> int:
@@ -49,6 +50,10 @@ def build_extract_character_graph(
             "next_location_number": 1,
             "scenes": [],
             "scene_history": [],
+            "claims": [],
+            "next_claim_number": 1,
+            "events": [],
+            "utterances": [],
         }
 
     def extract_characters(state: ExtractCharacterState) -> ExtractCharacterState:
@@ -188,6 +193,45 @@ def build_extract_character_graph(
         )
         return {"scenes": records, "scene_history": [*state["scene_history"], *records]}
 
+    def extract_events(state: ExtractCharacterState) -> ExtractCharacterState:
+        index = state["chapter_index"]
+        chapter = state["chapters"][index]
+        report(f"extract_events {chapter.unit_id}")
+        previous_summary = format_previous_context(state["summaries"][:index])
+        return {
+            "proposed_events": events.extract_events(
+                llm,
+                state["title"],
+                chapter,
+                state["scenes"],
+                state["characters"],
+                state["claims"],
+                state["next_claim_number"],
+                state["identity_redirects"],
+                previous_summary,
+            )
+        }
+
+    def validate_events(state: ExtractCharacterState) -> ExtractCharacterState:
+        chapter = state["chapters"][state["chapter_index"]]
+        report(f"validate_events {chapter.unit_id}")
+        chapter_events, claims, next_number = events.validate_events(
+            state["proposed_events"],
+            chapter,
+            state["scenes"],
+            state["characters"],
+            state["identity_redirects"],
+            state["claims"],
+            state["next_claim_number"],
+        )
+        return {
+            "chapter_events": chapter_events,
+            "claims": claims,
+            "next_claim_number": next_number,
+            "events": [*state["events"], *chapter_events.events],
+            "utterances": [*state["utterances"], *chapter_events.utterances],
+        }
+
     def save_json(state: ExtractCharacterState) -> ExtractCharacterState:
         chapter = state["chapters"][state["chapter_index"]]
         report(f"save_characters_json {chapter.unit_id}: {len(state['characters'])} characters")
@@ -236,6 +280,27 @@ def build_extract_character_graph(
                 for s in state["scene_history"]
             ],
         )
+        logic.save_json(
+            directory / "chapters" / f"{chapter.unit_id}.events.proposed.json",
+            state["proposed_events"].model_dump(),
+        )
+        logic.save_json(
+            directory / "chapters" / f"{chapter.unit_id}.events.json",
+            state["chapter_events"].model_dump(),
+        )
+        redirects = state["identity_redirects"]
+        logic.save_json(
+            directory / "claims.json",
+            [snapshot.resolve_claim(c, redirects).model_dump() for c in state["claims"]],
+        )
+        logic.save_json(
+            directory / "events.json",
+            [snapshot.resolve_event(e, redirects).model_dump() for e in state["events"]],
+        )
+        logic.save_json(
+            directory / "utterances.json",
+            [snapshot.resolve_utterance(u, redirects).model_dump() for u in state["utterances"]],
+        )
         return {}
 
     def save_graph(state: ExtractCharacterState) -> ExtractCharacterState:
@@ -261,6 +326,8 @@ def build_extract_character_graph(
         validate_locations,
         extract_scenes,
         validate_scenes,
+        extract_events,
+        validate_events,
         save_json,
         save_graph,
     ):
@@ -274,7 +341,9 @@ def build_extract_character_graph(
     graph.add_edge("extract_locations", "validate_locations")
     graph.add_edge("validate_locations", "extract_scenes")
     graph.add_edge("extract_scenes", "validate_scenes")
-    graph.add_edge("validate_scenes", "save_json")
+    graph.add_edge("validate_scenes", "extract_events")
+    graph.add_edge("extract_events", "validate_events")
+    graph.add_edge("validate_events", "save_json")
     graph.add_edge("save_json", "save_graph")
     graph.add_conditional_edges(
         "save_graph", next_step, {"next_chapter": "extract_characters", "done": END}

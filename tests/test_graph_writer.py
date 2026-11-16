@@ -18,7 +18,7 @@ from test_character_ingest import (
 )
 
 from pov_retell.infrastructure.llm import LLMError
-from pov_retell.infrastructure.neo4j_store import CHAPTER_STATEMENTS, Neo4jGraphWriter
+from pov_retell.infrastructure.neo4j_store import CHAPTER_STATEMENTS, KEYS, Neo4jGraphWriter
 from pov_retell.ingest.pipeline import ingest_book
 
 
@@ -186,4 +186,4 @@ def test_neo4j_writes_one_chapter_in_a_single_transaction() -> None:
     assert driver.rows == snapshot["characters"]
     assert (driver.book_id, driver.run_id) == ("sample", "run_a")
     constraints = [q for q in driver.queries if q.startswith("CREATE CONSTRAINT")]
-    assert len(constraints) == 4  # created once per writer, not per chapter
+    assert len(constraints) == len(KEYS)  # created once per writer, not per chapter

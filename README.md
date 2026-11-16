@@ -6,6 +6,11 @@
 characters, relationships, places and scenes. That data is the base for a POV graph: a graph that
 separates *what happened* in a story from *what each character knows* about it.
 
+<p align="center">
+  <img src="doc/presentation/assets/character-select.gif" width="800"
+       alt="Character select slide: hovering Harry, Hermione, Ron and Quirrell shows each one's perspective card, then Harry is locked as the POV">
+</p>
+
 > 🎞️ The project pitch is an interactive slide deck:
 > [`doc/presentation/pov-graph-slides.html`](doc/presentation/pov-graph-slides.html)
 > (open it in a browser; **Next/Space/→** to advance, **N** for speaker notes).

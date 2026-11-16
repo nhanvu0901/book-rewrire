@@ -210,6 +210,44 @@ class ChapterEvents(StrictModel):
     claims: list[ClaimRecord]
 
 
+KnowledgeChannel = Literal[
+    "prior", "witnessed", "told", "read", "overheard", "inferred", "learns_truth"
+]
+KnowledgeStance = Literal["believes", "doubts", "disbelieves"]
+
+
+class AcquisitionProposal(StrictModel):
+    character_id: Text
+    claim_id: Text
+    channel: KnowledgeChannel
+    stance: KnowledgeStance
+    segment_id: Text
+    source_id: Text | None = None
+    paragraph_ids: list[Text]
+
+
+class ExtractKnowledgeResponse(StrictModel):
+    claims: list[ClaimProposal]
+    acquisitions: list[AcquisitionProposal]
+
+
+class KnowledgeRecord(StrictModel):
+    acquisition_id: Text
+    character_id: Text
+    claim_id: Text
+    channel: KnowledgeChannel
+    stance: KnowledgeStance
+    segment_id: Text
+    source_id: Text | None = None
+    paragraph_ids: list[Text]
+
+
+class ChapterKnowledge(StrictModel):
+    chapter_id: Text
+    acquisitions: list[KnowledgeRecord]
+    claims: list[ClaimRecord]
+
+
 class ExtractCharacterState(TypedDict, total=False):
     book_id: str
     run_id: str
@@ -237,4 +275,7 @@ class ExtractCharacterState(TypedDict, total=False):
     next_claim_number: int
     events: list[EventRecord]
     utterances: list[UtteranceRecord]
+    proposed_knowledge: ExtractKnowledgeResponse
+    chapter_knowledge: ChapterKnowledge
+    knowledge: list[KnowledgeRecord]
     output_dir: Path

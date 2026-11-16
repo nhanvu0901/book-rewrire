@@ -4,6 +4,7 @@ Phase A:  `pov extract <file|url>`   `pov show <book_id>`
 Ingest:   `pov ingest <book_id> [--no-neo4j]`   `pov neo4j-status`
 """
 
+import json
 from collections import Counter
 from pathlib import Path
 from typing import NoReturn
@@ -25,6 +26,7 @@ from pov_retell.infrastructure.neo4j_store import (
 )
 from pov_retell.ingest.model import IngestResult
 from pov_retell.ingest.pipeline import ingest_book
+from pov_retell.ingest.timeline import format_knowledge, knowledge_at, latest_run
 
 app = typer.Typer(
     help="Extract books and characters with OpenRouter and Neo4j. See README.md.",
@@ -145,6 +147,33 @@ def show(
         typer.echo(f"\nFlagged paragraphs ({len(flagged)}):")
         for p in flagged:
             typer.echo(f"  {p.id}  {', '.join(p.flags)}  {p.text[:70]!r}")
+
+
+@app.command()
+def knowledge(
+    book_id: str = typer.Argument(..., help="Book id of an ingested book"),
+    character: str = typer.Argument(..., help="Character ID (char_001) or name"),
+    run: str | None = typer.Option(None, "--run", help="Run ID (default: the latest run)"),
+    until: str | None = typer.Option(
+        None, "--until", help="Last chapter (u05) or scene (u05_s2) to include"
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Print JSON instead of text"),
+    reveal: bool = typer.Option(
+        False, "--reveal", help="Also show each claim's real truth (spoilers)"
+    ),
+) -> None:
+    """Show what a character knows and believes at a point in the story."""
+    try:
+        settings = Settings()  # type: ignore[call-arg]  # required fields come from .env
+        ingest_dir = settings.BOOK_CLONE_DATA_DIR / "ingest"
+        run_dir = ingest_dir / book_id / run if run else latest_run(ingest_dir, book_id)
+        view = knowledge_at(run_dir, character, until, reveal=reveal)
+    except (OSError, ValueError, KeyError) as exc:
+        _fail(str(exc))
+    if as_json:
+        typer.echo(json.dumps(view.to_json(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(format_knowledge(view))
 
 
 def _summary(extracted: ExtractedBook) -> str:

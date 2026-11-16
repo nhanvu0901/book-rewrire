@@ -213,6 +213,7 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
             }
         ),
         json.dumps({"claims": [], "events": [], "utterances": [], "truth_changes": []}),
+        json.dumps({"claims": [], "acquisitions": []}),
         json.dumps({"characters": [{"character_id": "char_001", "candidate_name": "Mara"}]}),
         json.dumps({"relationships": []}),
         json.dumps(
@@ -245,6 +246,7 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
             }
         ),
         json.dumps({"claims": [], "events": [], "utterances": [], "truth_changes": []}),
+        json.dumps({"claims": [], "acquisitions": []}),
     ]
 
     def reply(request: httpx.Request) -> httpx.Response:
@@ -285,7 +287,7 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
     assert (output / "locations.json").exists()
     assert (output / "chapters/u01.scenes.json").exists()
     assert (output / "chapters/u02.scenes.json").exists()
-    assert state["http_calls"] == 17
+    assert state["http_calls"] == 19
     manifest = json.loads((output / "manifest.json").read_text())
     assert manifest["neo4j_writes"] is False
     assert manifest["summary_reasoning"] == "medium"
@@ -308,4 +310,4 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
         "require_parameters": True,
     }
     assert extract_req["reasoning"] == {"enabled": True}
-    assert len(list((output / "http").glob("*.response.json"))) == 17
+    assert len(list((output / "http").glob("*.response.json"))) == 19

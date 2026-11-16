@@ -1,373 +1,292 @@
-# pov-retell: trích xuất sách và kết nối Neo4j
+# POV Graph
 
-AI onboarding and operating instructions: [AI-work/README.md](AI-work/README.md).
-Current project knowledge: [AI-work/PROJECT_CONTEXT.md](AI-work/PROJECT_CONTEXT.md).
+**Retell a story from one character's point of view, using only what that character knows at that moment.**
 
-Đây là bản **tối giản, dễ học** của dự án POV Story Retelling. Trạng thái hiện tại:
+`pov-retell` is a Python CLI that turns a novel into structured, chapter-by-chapter data about its
+characters, relationships, places and scenes. That data is the base for a POV graph: a graph that
+separates *what happened* in a story from *what each character knows* about it.
 
-1. **Phase A, trích xuất**: đọc một cuốn sách (HTML, EPUB hoặc TXT), tìm cấu trúc chương, cắt thành
-   **units** và **paragraphs** có ID cố định, rồi ghi ra **file thường** (JSON + text).
-2. **Character Extraction**: summarize chapters, then use a general LLM to extract and update
-   complete character profiles chapter by chapter. Each extraction receives the original chapter,
-   the `WHO IS WHO` after chapter N-1 plus chapter summaries 1..N-1, and accumulated profiles. The
-   application assigns IDs, applies explicit merges, and saves selected Character properties to Neo4j
-   after completion.
-   Xem [`docs/INGEST_BASE.md`](docs/INGEST_BASE.md) và [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md).
+> 🎞️ The project pitch is an interactive slide deck:
+> [`doc/presentation/pov-graph-slides.html`](doc/presentation/pov-graph-slides.html)
+> (open it in a browser; **Next/Space/→** to advance, **N** for speaker notes).
+> The 5-minute talk track is in
+> [`doc/presentation/presentation-script-5min.md`](doc/presentation/presentation-script-5min.md).
 
-LangGraph điều phối vòng lặp chương, không dùng checkpoint.
-**Không có**: Postgres, SQLAlchemy, Alembic, phân tích beat/tri thức,
-retell, FastAPI/UI, eval, Phoenix/OTel, cache, tính chi phí. Bản đầy đủ (khoảng 2000 test, nhiều
-lớp) vẫn nằm ở branch `integration`; xem `docs/NEXT_STEPS.md`.
+---
 
-## 1. Phase A làm gì, từng bước
+## Why
 
-```text
-file / URL ──A1──▶ Book ──A2a──▶ canonical text + candidates ──A2b──▶ structure map
-                                                                          │
-   book.json  ◀──A3── paragraphs ◀────────────── units (đã validate) ◀──A2c
+Characters share a story, but they do not share the same knowledge.
+
+Take Harry in *Harry Potter and the Philosopher's Stone*. Before the final chapter he is sure that
+Snape is trying to steal the Stone. He has clues, and he reads all of them wrongly:
+
+| Before the reveal (up to Chapter 16) | What Harry learns in Chapter 17 |
+| --- | --- |
+| He sees Snape's injured leg after Halloween. | Quirrell's harmless manner was an act. |
+| Hermione sees Snape muttering during the Quidditch match. | Snape was protecting Harry during that match. |
+| He overhears Snape confronting Quirrell in the forest. | Voldemort was hiding in Quirrell's body. |
+
+A retelling of an earlier chapter from Harry's point of view must keep that suspicion. An AI that has
+already read the ending can easily spoil it. So the project's rule is:
+
+> **Model what characters know, not just where they were.**
+
+## The POV graph (target design)
+
+The graph has four layers. Each layer adds one kind of fact about the story.
+
+```mermaid
+graph LR
+    A["Character A<br/>(POV)"] -- RELATES_TO --> B["Character B"]
+    A -- EXPERIENCED --> E["Event"]
+    B -- PARTICIPATED_IN --> E
+    E -- OCCURRED_AT --> L["Location"]
+    B -- SAID --> U["Utterance"]
+    U -- ASSERTS --> C["Claim"]
+    E -- HAS_CLAIM --> C
+    A -- ACQUIRED --> K["Knowledge<br/>acquisition"]
+    K -- "ABOUT (truth)" --> C
 ```
 
-| Bước | Ai làm | Việc | File |
-|---|---|---|---|
-| **A1** | code | Đọc file hoặc tải URL, **nhận dạng định dạng từ nội dung** (không tin đuôi file), tính **sha256**, đọc title/author | `load.py` |
-| **A2a** | code | Tạo **canonical text** (văn bản sạch, mọi vị trí về sau đều trỏ vào nó) và gom **candidates**: chỗ *có thể* bắt đầu một unit (heading, link mục lục, anchor, dòng giống tiêu đề, spine/nav của EPUB) | `html_text.py`, `candidates.py` |
-| **A2b** | LLM | Dựng **structure map**: mỗi candidate là `front`, `toc`, `license`, `body_unit`, `part_heading` hay `back`. LLM chỉ trả **ID + role + title**, không bao giờ trả vị trí | `llm_map.py`, `llm.py` |
-| **A2c** | code | **Cắt** canonical text theo vị trí của các candidate được chọn, rồi **validate**: liền nhau, đúng thứ tự, không rỗng, phủ trọn thân truyện, mỗi part có chapter. Front matter, back matter và license **nằm ngoài** mọi unit | `cut.py` |
-| **A3** | code | Chia mỗi unit thành **paragraphs** có ID cố định (`u04_p041` = unit 4, đoạn 41) và gắn **flag** cho đoạn bất thường (`too_short`, `too_long`, `suspicious_header`, `license_leak`) | `paragraphs.py` |
+| Layer | Nodes | What it records |
+| --- | --- | --- |
+| 1 · People | `Character` | Who exists, their names, aliases and relationships. |
+| 2 · What happened | `Event`, `Location` | What happened, who took part, where, and in what order. |
+| 3 · What was said | `Utterance`, `Claim` | What someone said, kept apart from whether it is true. |
+| 4 · What was learned | `Knowledge acquisition` | How and when a character learned a claim (saw, heard, was told, inferred) and what they believe about it. |
 
-Nguyên tắc xuyên suốt: **code giữ sự thật, LLM chỉ đề xuất**. Một structure map cắt ra units không
-hợp lệ (hở, chồng, rỗng, part không có chapter...) bị **từ chối kèm lỗi rõ ràng**, không bị sửa
-ngầm: cắt sai chương thì mọi bước sau đều lệch theo. Điều đáng ngờ nhưng chưa chắc sai (một unit
-không có paragraph nào, một chapter đứng sau part mà không khai báo part cha) thành `warnings` trong
-`book.json`.
+Hearing something, seeing something, and knowing it are different. Layer 4 lets a narrator
+receive only the knowledge that the chosen character has *at the chosen point in the story*.
 
-## 2. Bắt đầu đọc từ đâu
+> **Status:** this is the design. Today the pipeline extracts characters, relationships, locations
+> and scene maps to JSON, and writes only `Character` nodes to Neo4j. See [Roadmap](#roadmap).
 
-Mã được chia theo trách nhiệm, nhưng vẫn là cùng một chương trình dòng lệnh:
+## What we learned building it
+
+### Sprint 1 — Design the graph
+
+Separate the story's facts from each character's view of them, as shown above.
+
+### Sprint 2 — One prompt for everything did not work
+
+The first approach sent a whole chapter (around 6,000 words) and asked for people, feelings,
+relationships and scenes in one large answer. It:
+
+- **invented connections** between people who were never in the same room;
+- **missed less prominent characters** (Neville, Madam Hooch, Fluffy);
+- **failed as a whole** when one answer was cut off or returned broken JSON;
+- and made it impossible to tell **which** of the tasks had gone wrong.
+
+The fix: **give each step one job, and check its answer before continuing.** LangGraph runs the
+steps in order, Pydantic and Python checks validate each answer, and a rejected answer is retried
+with the exact error. Correct formatting still does not prove a story fact is correct, so original
+chapter text stays the evidence and every record stays a *candidate*.
+
+### Sprint 3 — Harry does not know yet
+
+An AI that knows the ending can spoil an earlier scene. The design uses two readings with
+different jobs:
+
+1. **Story facts (WHO IS WHO):** read the whole book to connect names and identities, including
+   those revealed near the end (Quirrell is hiding Voldemort; Snape was protecting Harry).
+2. **The character's view (WHEN THEY LEARN IT):** walk the chapters in order and record what the
+   character believes, and when new information changes their mind. Harry's Chapter 16 belief is
+   kept for Chapter 16 scenes, even though it is wrong.
+
+---
+
+## How it works today
+
+```mermaid
+flowchart LR
+    S["Book<br/>HTML · EPUB · TXT"] -->|pov extract| X["book.json<br/>units/*.txt"]
+    X -->|pov ingest| SG["summarize_chapter<br/>graph"]
+    SG --> EG["extract_character<br/>graph"]
+    EG --> J["JSON per run"]
+    EG -->|optional| N[("Neo4j<br/>Character nodes")]
+```
+
+One rule holds across the project: **code keeps the truth, the LLM only proposes.** The LLM never
+returns character offsets or permanent IDs; Python cuts the text, assigns IDs, validates every
+answer, and rejects (rather than silently repairs) anything that does not fit.
+
+### 1. `pov extract` — book to chapters and paragraphs
+
+| Step | Done by | What happens | File |
+| --- | --- | --- | --- |
+| A1 | code | Read a file or URL, detect the format **from its content**, hash it (sha256), read title and author. | `book/load.py` |
+| A2a | code | Build clean **canonical text** and collect **candidates** where a unit may start (headings, TOC links, anchors, title-like lines, EPUB spine/nav). | `book/html_text.py`, `book/candidates.py` |
+| A2b | LLM | Build a **structure map**: label each candidate `front`, `toc`, `license`, `body_unit`, `part_heading` or `back`. The LLM returns IDs, roles and titles only. | `book/llm_map.py` |
+| A2c | code | **Cut** the canonical text at the chosen candidates and **validate**: contiguous, ordered, non-empty, full body coverage, every part has a chapter. | `book/cut.py` |
+| A3 | code | Split each unit into **paragraphs** with stable IDs (`u04_p041` = unit 4, paragraph 41) and flag odd ones (`too_short`, `too_long`, `suspicious_header`, `license_leak`). | `book/paragraphs.py` |
+
+A paragraph ID points to a source block, which can hold several sentences. IDs are stable within
+one source file only: the HTML, EPUB and TXT editions of the same book split paragraphs differently.
+
+### 2. `pov ingest` — chapters to characters, places and scenes
+
+Ingestion validates the saved chapter files against `book.json`, creates a fresh run directory,
+then runs two LangGraph graphs, each looping over the chapters.
+
+**Summary graph** (3 calls per chapter, plus 1 at the end):
+
+```text
+initialize -> summarize_chapter -> update_who_is_who -> update_where_is_where
+           -> validate_summary -> save_summary --(next chapter)--> summarize_chapter
+                                               --(done)--------> summarize_book
+```
+
+- `summarize_chapter` summarises the chapter in its own words, without copying sentences.
+- `update_who_is_who` and `update_where_is_where` return only **changes** (`add` / `update`) to
+  running lists of character and place cards. Python assigns stable IDs (`C001`, `P001`, …),
+  rejects unknown or duplicate entries, and merges the changes.
+- `summarize_book` runs once after the last chapter and writes the book's `core_memory`.
+
+**Extraction graph** (4 calls per chapter):
+
+```text
+initialize -> extract_characters -> validate_characters
+           -> extract_relationships -> validate_relationships
+           -> extract_locations -> validate_locations
+           -> extract_scenes -> validate_scenes -> save_json --(next chapter)--> extract_characters
+```
+
+Each call for chapter *N* receives the original chapter text plus context through chapter *N−1*
+only (the WHO IS WHO and WHERE IS WHERE lists and earlier chapter summaries). It never sees the
+current or later summaries.
+
+| Step | Returns | Python checks |
+| --- | --- | --- |
+| Characters | New characters and new facts about known ones (changes only). | Assigns `char_NNN`, applies explicit merges, keeps absent characters and unchanged facts; equal names alone never merge people; personality traits must be stated in the text. |
+| Relationships | `start` / `end` operations between characters, with paragraph evidence. | Existing, distinct characters; evidence from the current chapter; `end` must close an open relationship. |
+| Locations | New and updated places, with `part_of` containment. | `loc_NNN` IDs, valid references, no self-reference or containment cycles. |
+| Scenes | Ordered scene segments covering the chapter. | Full paragraph coverage with no gaps or overlaps; viewpoint characters are present; valid time relation (`continues`, `later`, `parallel`, `flashback`, `time_jump`). |
+
+For a book of *N* chapters this is `3N + 1` summary calls and `4N` extraction calls before retries.
+Only after the last chapter does the run write selected `Character` properties to Neo4j
+(skip with `--no-neo4j`). There is no checkpoint or resume: each run starts from chapter 1.
+
+---
+
+## Quick start
+
+Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), an [OpenRouter](https://openrouter.ai)
+API key, and Docker if you want Neo4j.
+
+```bash
+make install                          # uv sync --extra dev
+cp .env.example .env                  # then fill in the values (never commit .env)
+
+# 1. Split a book into chapters and paragraphs
+uv run pov extract path/to/book.html --id my-book
+uv run pov show my-book               # table of units, flags and warnings
+uv run pov show my-book u04           # paragraphs of unit u04
+
+# 2a. Ingest without Neo4j (JSON output only)
+uv run pov ingest my-book --no-neo4j
+
+# 2b. Or ingest and write Character nodes to Neo4j
+make neo4j-up                         # Neo4j 5 Community, waits for a healthy container
+uv run pov neo4j-status               # connectivity check only
+uv run pov ingest my-book
+make neo4j-shell                      # cypher-shell; `make neo4j-down` to stop
+```
+
+`pov extract` accepts a path or an `http(s)` URL. Extracting a *different* file under an existing
+book ID is refused (its sha256 differs); use `--id` to give it its own name.
+
+### Configuration
+
+Settings come from `.env` at the repository root; environment variables override them.
+
+| Variable | Used for |
+| --- | --- |
+| `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` | All LLM calls. |
+| `OPENROUTER_MODEL`, `OPENROUTER_MAX_TOKENS` | Structure mapping in `pov extract`. |
+| `OPENROUTER_SUMMARIZE_CHAPTER_MODEL`, `…_MAX_TOKENS`, `…_REASONING` | The summary graph. Reasoning is `none`, `enabled`, `low`, `medium` or `high`. |
+| `OPENROUTER_EXTRACT_CHARACTER_MODEL`, `…_MAX_TOKENS`, `…_REASONING` | The extraction graph. |
+| `OPENROUTER_EXTRACT_CHARACTER_PROVIDER`, `…_ALLOW_FALLBACKS` | Pin OpenRouter providers for extraction (empty = default routing). |
+| `OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS` | `true` sends a strict JSON schema built from the Pydantic model; `false` sends `json_object`. |
+| `BOOK_CLONE_DATA_DIR` | Root for source books, extractions and runs (`<repo>/book` by convention). |
+| `NEO4J_PASSWORD`, `NEO4J_USER` | Neo4j credentials (password required for Neo4j, never printed). |
+| `NEO4J_HTTP_PORT`, `NEO4J_BOLT_PORT` | Host ports, `7475` / `7688` by default, so they do not clash with another local Neo4j. |
+
+Models are chosen in `.env` only; any model can be swapped without changing the graphs.
+
+LLM clients are wrapped for LangSmith tracing. LangSmith reads the process environment, not
+`.env`, so export its variables in your shell or run `uv run --env-file .env pov ingest …`.
+
+### Output
+
+```text
+<BOOK_CLONE_DATA_DIR>/
+├── extracted/<book_id>/
+│   ├── book.json              metadata, candidates, structure map, units, paragraphs
+│   ├── canonical.txt          clean text; every char_start/char_end points into it
+│   └── units/NN_title.txt     one readable file per chapter
+└── ingest/<book_id>/<run_id>/
+    ├── summaries/uNN.summary.json     chapter summary + WHO IS WHO + WHERE IS WHERE
+    ├── summaries/book_memory.json     final lists + core_memory
+    ├── chapters/uNN.*.proposed.json   parsed LLM proposals (characters, relationships, locations, scenes)
+    ├── chapters/uNN.*.json            accepted snapshots after each chapter
+    ├── characters.json, relationships.json, locations.json
+    └── identity_redirects.json        merged IDs -> surviving IDs
+```
+
+---
+
+## Repository layout
 
 ```text
 src/pov_retell/
-├── cli.py                  lệnh `pov` mà bạn gõ
-├── config.py               cấu hình và đường dẫn dữ liệu
-├── book/                   đọc, tách và lưu sách thành file
-├── ingest/                 LangGraph, xử lý chương và models nhân vật
-└── infrastructure/         kết nối OpenRouter và Neo4j
+├── cli.py                     `pov` commands: extract, show, ingest, neo4j-status
+├── config.py                  settings from .env
+├── book/                      pov extract: load, candidates, LLM map, cut, paragraphs, output
+├── ingest/
+│   ├── pipeline.py            runs the summary graph, then the extraction graph, then Neo4j
+│   ├── source.py, model.py    validated chapter input and run result
+│   └── graph/
+│       ├── summarize_chapter/ graph, models, logic and prompt/
+│       └── extract_character/ graph, models, identity, relationship, location, scene_map and prompt/
+└── infrastructure/
+    ├── llm.py                 OpenRouter JSON and text clients with validation and retries
+    └── neo4j_store.py         connectivity and Character writes
+docker/compose.yml             Neo4j only (Compose project `book-clone-dev`)
+doc/presentation/              slide deck, assets and talk script
+AI-work/                       project context, tickets and agent roles
+tests/                         offline tests on invented sample stories
 ```
 
-Đọc theo thứ tự này (mỗi file có docstring giải thích *vì sao*, không chỉ *cái gì*):
+A good reading order: `book/models.py` → `book/pipeline.py` → `ingest/pipeline.py` → the two
+`graph.py` files → their `prompt/` folders.
 
-| # | File | Nội dung |
-|---|---|---|
-| 1 | `src/pov_retell/book/models.py` | Mọi data shape của phase A (Book, Candidate, MapItem, Unit, Paragraph, ExtractedBook) |
-| 2 | `src/pov_retell/book/pipeline.py` | Hàm `extract_book()`: A1 → A3 trong 40 dòng, đọc cái này để thấy bức tranh tổng |
-| 3 | `src/pov_retell/book/load.py` | A1 |
-| 4 | `src/pov_retell/book/candidates.py` (+ `html_text.py`) | A2a, phần dài nhất vì mỗi định dạng một kiểu |
-| 5 | `src/pov_retell/infrastructure/llm.py`, `book/llm_map.py` | A2b: client OpenRouter và prompt |
-| 6 | `src/pov_retell/book/cut.py` | A2c: cắt và validate |
-| 7 | `src/pov_retell/book/paragraphs.py` | A3 |
-| 9 | `src/pov_retell/book/output.py`, `cli.py` | Ghi file, lệnh `pov` |
-| 10 | `src/pov_retell/ingest/pipeline.py` | Hàm `ingest_book`, gọi các graph theo bước |
-| 10a | `src/pov_retell/ingest/graph/extract_character/graph.py` | Character, relationship, location and scene-map extraction nodes, edges and recursion limit helper |
-| 10b | `src/pov_retell/ingest/graph/extract_character/model.py` | Character, relationship, location, scene-map, response and graph state models |
-| 11 | `src/pov_retell/ingest/graph/extract_character/logic.py`, `identity.py`, `relationship.py`, `location.py`, `scene_map.py` | Full-profile, relationship, location and scene-map LLM calls, merges, history and JSON persistence |
-| 11a | `src/pov_retell/ingest/model.py`, `source.py` | Shared chapter input, pipeline result and source validation |
-| 11b | `src/pov_retell/ingest/graph/summarize_chapter/graph.py` | Sequential chapter summary nodes, edges and recursion limit helper |
-| 11c | `src/pov_retell/ingest/graph/summarize_chapter/model.py`, `logic.py` | Summary models, LLM calls and JSON persistence |
-| 12 | `src/pov_retell/infrastructure/neo4j_store.py` | Kết nối và ghi Character vào Neo4j |
-| 13 | `src/pov_retell/ingest/graph/summarize_chapter/prompt/` (`summarize_chapter.py`, `update_who_is_who.py`, `update_where_is_where.py`, `summarize_book.py`), `src/pov_retell/ingest/graph/extract_character/prompt/` (`extract_character.py`, `extract_relationship.py`, `extract_location.py`, `extract_scene_map.py`) | Chapter summaries, WHO IS WHO, WHERE IS WHERE, book core memory, character, relationship, location and scene-map extraction prompts |
-| - | `src/pov_retell/book/text.py`, `config.py` | Helper nhỏ; settings (gồm `NEO4J_*`) |
-| - | `docker/compose.yml`, `Makefile` | Neo4j 5 community (project `book-clone-dev`), `neo4j-up/down/shell`, `ingest` |
-| - | `docs/INGEST_BASE.md` | Cách chạy ingest, vị trí kết quả và giới hạn hiện tại |
-| - | `tests/` | Mỗi bước có test riêng, đọc test để thấy ví dụ vào/ra |
-
-## 3. Cài đặt và chạy
-
-Cần Python 3.12 và [uv](https://docs.astral.sh/uv/).
+## Development
 
 ```bash
-make install                      # uv sync --extra dev
-
-uv run pov extract <file|url>                  # LLM map (cần OPENROUTER_API_KEY)
-uv run pov extract <file> --id my-book         # đặt book id (mặc định: slug của title)
-uv run pov extract <file> --out ./out          # thư mục ra (mặc định: DATA_DIR/extracted)
-
-uv run pov show <book_id>                      # bảng units, flag, cảnh báo
-uv run pov show <book_id> u04                  # in các paragraph của unit u04
+make test             # offline tests: no real book, API key or Neo4j needed
+make lint             # ruff check + ruff format --check
+make typecheck        # mypy --strict
+make test-neo4j       # opt-in: connectivity and temporary Character writes
+make test-openrouter  # opt-in: sends one real, billable OpenRouter request
 ```
 
-Ví dụ với 3 cuốn đặt trong `book/books/` của project:
+Tests use invented stories (`tests/samples.py`) rendered as HTML, EPUB and TXT. **Book texts are
+never committed**: `book/` is git-ignored, and the test books used during development are
+copyrighted.
 
-```bash
-uv run pov extract book/books/lww.html
-uv run pov extract book/books/treasure_island.html
-uv run pov extract book/books/treasure_island.epub --id treasure-island-epub
-```
+Work is organised as tickets in [`AI-work/tickets/`](AI-work/tickets/README.md), each on its own
+`ticket/T-NNNN-…` branch. Start with [`AI-work/README.md`](AI-work/README.md) and
+[`AI-work/PROJECT_CONTEXT.md`](AI-work/PROJECT_CONTEXT.md) for the current state and open decisions.
 
-> **Một cuốn, nhiều định dạng:** html, epub và txt của cùng một cuốn đều có title
-> `Treasure Island` nên cùng book id. Trích xuất file thứ hai sẽ bị **từ chối** (khác `sha256`) để
-> không ghi đè lên file đầu. Dùng `--id` để đặt tên riêng. Chạy lại **đúng file cũ** thì được ghi
-> đè (kết quả như nhau). ID của paragraph chỉ ổn định **trong một file**: html, epub, txt của cùng
-> một cuốn có số đoạn hơi khác nhau, đừng trộn.
+## Roadmap
 
-**Cấu hình** (`pydantic-settings` đọc `.env` ở gốc repo; biến môi trường có thể ghi đè).
-Sao chép `.env.example` thành `.env` rồi điền đủ giá trị. `.env` không được commit.
-
-| Biến | Giá trị trong `.env` hiện tại | Dùng cho |
-|---|---|---|
-| `BOOK_CLONE_DATA_DIR` | `<project>/book` | sách nguồn ở `book/books/`, output ở `book/extracted/` |
-| `OPENROUTER_API_KEY` | cần điền | `pov extract`, `pov ingest` |
-| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | |
-| `OPENROUTER_MODEL` | set in `.env` | Book structure mapping (`pov extract`) |
-| `OPENROUTER_SUMMARIZE_CHAPTER_MODEL` | set in `.env` | Chapter and cumulative book summaries |
-| `OPENROUTER_SUMMARIZE_CHAPTER_REASONING` | `none`, `enabled`, `low`, `medium`, or `high` in `.env` | Summary reasoning; `none` omits the parameter and uses the provider default |
-| `OPENROUTER_EXTRACT_CHARACTER_MODEL` | set in `.env` | Full character profiles, aliases and merges (`pov ingest`) |
-| `OPENROUTER_MAX_TOKENS` | set in `.env` | Output-token limit for `OPENROUTER_MODEL` (`pov extract`) and diagnostics, including reasoning tokens |
-| `OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS` | set in `.env` | Output-token limit for the summary model |
-| `OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS` | set in `.env` | Output-token limit for the character model |
-| `OPENROUTER_EXTRACT_CHARACTER_PROVIDER` | set in `.env` (e.g. `open-inference/fp4` or empty) | Comma-separated provider tags for the extract client; empty uses default routing |
-| `OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS` | `true` or `false` in `.env` | Whether OpenRouter may fall back when `OPENROUTER_EXTRACT_CHARACTER_PROVIDER` is set |
-| `OPENROUTER_EXTRACT_CHARACTER_REASONING` | `none`, `enabled`, `low`, `medium`, or `high` in `.env` | Reasoning configuration sent by the extract client |
-| `OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS` | `true` or `false` in `.env` | `true` sends strict `json_schema` derived from the Pydantic response model; `false` sends `json_object` |
-| `NEO4J_PASSWORD` | đặt trong `.env`, **bắt buộc** cho Neo4j | `make neo4j-up`, `pov ingest`; không bao giờ bị in ra |
-| `NEO4J_USER` | `neo4j` | |
-| `NEO4J_HTTP_PORT` / `NEO4J_BOLT_PORT` | `7475` / `7688` | khác `7474`/`7687` của stack `book-clone` |
-
-## 4. Định dạng output
-
-```text
-<BOOK_CLONE_DATA_DIR>/extracted/<book_id>/
-├── book.json            metadata + candidates + map + units + paragraphs (có schema_version)
-├── canonical.txt        văn bản sạch; mọi char_start/char_end trỏ vào file này
-└── units/NN_title.txt   một file đọc được cho mỗi chapter (NN = thứ tự unit)
-```
-
-`NN` là `order` của unit nên **khớp với ID**: `units/02_...txt` là unit `u02`. Part chỉ có tiêu
-đề, không có paragraph, nên không có file riêng (vì thế danh sách file có thể bắt đầu từ `02`).
-
-Ví dụ thật, chạy trên truyện tự bịa dùng trong test (`The Lantern Keeper`, không phải sách thật):
-
-```text
-$ uv run pov extract lantern.txt
-Book:       the-lantern-keeper | The Lantern Keeper by Jane Doe
-File:       txt, sha256 a40642bd86841b9d...
-Map:        llm, 11 candidates
-Units:      5 (2 part, 3 chapter)
-Paragraphs: 7 (0 flagged)
-
-$ uv run pov show the-lantern-keeper
-ID    KIND     PARENT PARAS  WORDS  TITLE
-u01   part     -          0      0  PART ONE: THE CLIFF
-u02   chapter  u01        3     53  CHAPTER I: The Lamp
-u03   chapter  u01        2     32  CHAPTER II: The Stranger
-u04   part     -          0      0  PART TWO: THE STORM
-u05   chapter  u04        2     38  CHAPTER III: The Light Goes Out
-```
-
-`units/02_chapter-i-the-lamp.txt`:
-
-```text
-CHAPTER I: The Lamp
-===================
-
-[u02_p001] One evening the keeper climbed the long stair to light the great lamp, as his father ...
-
-[u02_p002] "The sea is quiet tonight," said the boy who followed him up the steps.
-```
-
-`book.json` (rút gọn; các mảng `candidates` và `map_items` bị lược):
-
-```json
-{
-  "schema_version": 1,
-  "book": {"id": "the-lantern-keeper", "title": "The Lantern Keeper", "author": "Jane Doe",
-           "format": "txt", "sha256": "a40642bd...", "source": "/path/to/lantern.txt"},
-  "map_method": "llm",
-  "candidates": [{"cand_id": "cand_005", "kind": "caps_line", "text": "THE CLIFF",
-                  "char_pos": 276, "preview": "THE CLIFF CHAPTER I. The Lamp One evening ..."}],
-  "map_items":  [{"cand_id": "cand_005", "role": "front", "unit_kind": "front",
-                  "title": "THE CLIFF", "parent_cand_id": null}],
-  "units": [
-    {"id": "u01", "order": 1, "kind": "part",    "title": "PART ONE: THE CLIFF",
-     "parent_id": null, "char_start": 266, "char_end": 287},
-    {"id": "u02", "order": 2, "kind": "chapter", "title": "CHAPTER I: The Lamp",
-     "parent_id": "u01", "char_start": 287, "char_end": 520}
-  ],
-  "paragraphs": [
-    {"id": "u02_p001", "unit_id": "u02", "order": 1, "text": "One evening the keeper ...",
-     "char_start": 308, "char_end": 445, "flags": []}
-  ],
-  "warnings": []
-}
-```
-
-Tên bảng và cột bám theo mục 5.1 của thiết kế (`books`, `structure_candidates`, `structure_maps`,
-`units`, `paragraphs`), nên bước ingest sau không phải đổi tên gì.
-
-## 5. Kết quả cũ trên 3 cuốn sách
-
-Số liệu dưới đây thuộc lần trích xuất cũ trước khi chuyển sang LLM. Chúng không phải kết quả
-đã kiểm chứng của pipeline hiện tại:
-
-| File | Units | Paragraphs | Flagged |
-|---|---|---|---|
-| `lww.html` | 17 chapter | 822 | 1 |
-| `treasure_island.html` | 6 part + 34 chapter | 1382 | 5 |
-| `treasure_island.epub` | 6 part + 34 chapter | 1452 | 74 |
-| `treasure_island.txt` | 6 part + 34 chapter | 1375 | 1 |
-| `pride_and_prejudice.html` | 61 chapter | 2120 | 10 |
-| `pride_and_prejudice.epub` | 61 chapter | 2113 | 3 |
-| `pride_and_prejudice.txt` | 61 chapter | 2310 | 4 |
-
-**Treasure Island: 34 chapter, 6 part được biểu diễn thế nào?** Mỗi part là **một unit
-`kind: "part"`** chỉ chứa dòng tiêu đề (không có paragraph); mỗi chapter là unit
-`kind: "chapter"` có `parent_id` trỏ tới part của nó (quan hệ Part → Chapter, quyết định R1 trong
-thiết kế). Vì vậy `units` có 40 phần tử, nhưng **34 chapter** là các unit có paragraph và là các đơn
-vị của nút NEXT. Muốn chỉ lấy chapter: `[u for u in units if u["kind"] == "chapter"]`.
-
-**Vài điều thật trong dữ liệu (flag để người xem quyết định, không phải lỗi của code):**
-
-- `treasure_island.epub` có 74 flag `too_short`: bản EPUB này chèn **số trang** như `0033m` thành
-  một đoạn riêng (69 cái), cộng 5 dòng ngắn thật. `pride_and_prejudice.html` có 7 flag `too_short`
-  cùng kiểu: số trang `{6}`, `{27}`... Flag đã bắt đúng chúng; bước sau nên bỏ các đoạn đó.
-- Các flag `too_short` còn lại là dòng ngắn thật: `Ten feet.`, ký hiệu `J. T.`, `The End`.
-- `too_long` (3 cái trong mỗi bản Pride and Prejudice): ba lá thư dài (ví dụ thư của Darcy) nằm
-  trong **một** đoạn. Đó là đoạn dài thật, không phải thiếu chỗ ngắt.
-- `treasure_island.txt`: bản Gutenberg này in chương 17 là `XXVII` (lỗi gõ trong **file nguồn**).
-  Số lượng vẫn đúng 34 vì code cắt theo vị trí tiêu đề, không theo con số.
-- Số đoạn của cùng một cuốn khác nhau giữa các định dạng (1382 / 1452 / 1375 cho Treasure Island)
-  vì mỗi định dạng ngắt dòng và chèn số trang theo kiểu riêng. Đó là lý do ID chỉ ổn định
-  trong **một file** (xem ghi chú ở mục 3).
-
-## 6. LLM map
-
-`uv run pov extract <file>` gửi danh sách candidate (ID, kind, text, vài chữ đầu) cho
-OpenRouter và nhận lại ID + role + title. Code vẫn là bên cắt và validate. `llm.py` chỉ ~90 dòng:
-
-- model và `base_url` lấy từ config (`openai/gpt-4o-mini`, `https://openrouter.ai/api/v1`);
-- `json_object` rồi validate bằng Pydantic; câu trả lời sai thì thử lại **tối đa 2 lần**, mỗi lần
-  kèm đúng lỗi vừa gặp;
-- câu trả lời bỏ sót, lặp hoặc bịa `cand_id` bị từ chối trước khi tới bước cắt.
-
-Unit test dùng fake
-(`tests/fakes.py`, `tests/test_llm.py`) nên không gọi API. Test riêng
-`tests/test_openrouter_integration.py` gửi một request thật khi chạy `make test-openrouter`;
-cần key OpenRouter trong `.env` và model đang chọn phải sẵn sàng phục vụ.
-
-## 7. Kiểm tra chất lượng
-
-```bash
-make test         # test offline, không cần sách thật hoặc Neo4j
-make lint         # ruff check + ruff format --check
-make typecheck    # mypy --strict trên src và tests
-make test-neo4j   # Opt-in: connectivity and temporary Character writes
-make test-openrouter # OPT-IN: gửi một request thật tới OpenRouter (cần key trong .env; có tính phí)
-```
-
-Test chỉ dùng **truyện tự bịa** (`tests/samples.py`, vẽ ra HTML, EPUB và TXT) cùng vài đoạn ngắn
-tự viết. **Không commit văn bản sách** (LWW còn bản quyền); sách thật chỉ nằm ngoài git.
-
-## 8. Ingest nhân vật vào Neo4j
-
-```bash
- # Đặt NEO4J_PASSWORD (>= 8 ký tự) trong .env trước khi chạy; không commit file này.
-make neo4j-up                                  # Neo4j 5 community, chờ healthcheck xanh
-uv run pov neo4j-status                        # chỉ kiểm tra kết nối
-uv run pov ingest narnia-debug
-make neo4j-shell                               # cypher-shell;  make neo4j-down để tắt
-```
-
-Khi chỉ thử LLM, bỏ qua Neo4j hoàn toàn (không kết nối, không ghi; JSON vẫn được lưu):
-
-```bash
-uv run pov ingest narnia-debug --no-neo4j
-```
-
-`ingest_book` validates the extracted chapter files and creates one run directory.
-It runs the `summarize_chapter` graph first, then the `extract_character` graph.
-Each graph keeps its own models and logic in its graph folder.
-
-```text
-load_chapters -> summarize_chapter graph -> extract_character graph -> save_neo4j
-
-summarize_chapter: initialize -> summarize_chapter -> validate_summary -> save_summary -> summarize_book
-                                    ^                                    |
-                                    +----------- next chapter -----------+
-
-extract_character: initialize -> extract_characters -> validate_characters -> extract_relationships -> validate_relationships -> extract_locations -> validate_locations -> extract_scenes -> validate_scenes -> save_json
-                                      ^                                                                                                                                                                            |
-                                      +-------------------------------------------------------------------------- next chapter ------------------------------------------------------------------------------------+
-```
-
-For each chapter, the summary graph makes three plain-text calls:
-1. `summarize_chapter`: writes `chapter_summary` for the current chapter using the previous
-   `WHO IS WHO` and `WHERE IS WHERE` lists, all preceding chapter summaries in order, and the
-   original chapter text.
-2. `update_who_is_who`: updates the complete `WHO IS WHO` character list (`name | aliases or - | identity card`)
-   from the previous `WHO IS WHO` (empty for chapter 1) and the original chapter text, without
-   chapter summaries or the call-1 output. Python validates that each line has three `|` fields
-   and that no earlier character name was dropped, retrying up to two times on violations.
-3. `update_where_is_where`: updates the complete `WHERE IS WHERE` place list (`name | aliases or - | place card`)
-   from the previous `WHERE IS WHERE` (empty for chapter 1) and the original chapter text, without
-   chapter summaries, `WHO IS WHO`, or the call-1 output. Python validates that each line has three
-   `|` fields and that no earlier place name was dropped, retrying up to two times on violations.
-
-After the last chapter, `summarize_book` runs once on all chapter summaries in order to write
-`core_memory` and saves `summaries/book_memory.json` (`{"who_is_who", "where_is_where", "core_memory"}`).
-
-Character extraction uses one general-LLM JSON call per chapter, excluding repair retries.
-Its input contains the original current chapter, complete accumulated profiles, and Python-assembled
-context through the **previous** chapter (the `WHO IS WHO` and `WHERE IS WHERE` after chapter N-1
-plus chapter summaries 1..N-1; empty for u01). It never receives the current or later chapter
-summaries. Summaries are fallible context; the original chapter remains the evidence.
-
-The response contains only changes: new characters, and existing characters who appear in
-or gain information from the chapter, with only the new aliases, attributes and explicit
-identity merges. Omitted characters and null or empty fields keep their stored values. Python
-assigns permanent IDs to `new_N` proposals, keeps the earliest surviving ID on merges, retains
-absent records, and preserves known facts on empty updates. Names do not need to occur
-verbatim in the current chapter, and equal names alone do not merge people.
-
-Personality traits must be explicitly described in the source. New trait wording must also
-occur in the original chapter; existing traits survive later chapters that do not repeat them.
-This source check cannot establish ownership or truth by itself.
-
-The unused ScaleDown experiment was removed on 2026-10-26; historical run data is preserved.
-Model settings stay in `.env`:
-`OPENROUTER_SUMMARIZE_CHAPTER_MODEL` and `OPENROUTER_EXTRACT_CHARACTER_MODEL` select the
-active models. The user can replace either model without changing the graph.
-
-For N chapters, ingestion uses 3N+1 summary calls and 4N extraction calls (`N` character calls, `N` relationship calls, `N` location calls, and `N` scene-map calls) before retries.
-Only after all chapters finish does it write selected Character properties to Neo4j.
-It does not yet write `RELATES_TO` edges, `Location` nodes, or `Scene` nodes to Neo4j.
-
-Output under `book/ingest/<book_id>/<run_id>/`:
-
-- `summaries/u01.summary.json`, etc.: per-chapter `chapter_id`, `chapter_summary`, `who_is_who`, and `where_is_where`.
-- `summaries/book_memory.json`: final `who_is_who`, `where_is_where`, and `core_memory`.
-- `chapters/u01.proposed.json`, etc.: original full-profile LLM proposals.
-- `chapters/u01.characters.json`, etc.: cumulative accepted character snapshots.
-- `chapters/u01.relationships.proposed.json`, etc.: original relationship LLM proposals.
-- `chapters/u01.relationships.json`, etc.: cumulative accepted relationship snapshots.
-- `chapters/u01.locations.proposed.json`, etc.: original location LLM proposals.
-- `chapters/u01.locations.json`, etc.: cumulative accepted location snapshots.
-- `chapters/u01.scenes.proposed.json`, etc.: original scene-map LLM proposals.
-- `chapters/u01.scenes.json`, etc.: validated per-chapter scene segments with `segment_id` (`u01_s1`, ...).
-- `identity_redirects.json`: retired IDs mapped to surviving IDs.
-- `characters.json`: the latest accepted character list.
-- `relationships.json`: the latest accepted relationship list.
-- `locations.json`: the latest accepted location list.
-
-Model names are printed before each graph is built. Each invocation creates a new run;
-there is no checkpoint or resume. A failed run retains completed files and does not reach
-the final Neo4j write. See [`AI-work/handoffs/HANDOFF_2026-10-22.md`](AI-work/handoffs/HANDOFF_2026-10-22.md)
-for the historical experiments that led to restoring this workflow.
-
-`docker/compose.yml` chỉ có Neo4j và đặt project name `book-clone-dev` (không phải `book-clone`), nên
-container, network và **volume khác hẳn** stack `book-clone` đang chạy. Cổng host cũng khác để không
-đụng nhau: stack kia dùng `7474`/`7687`, ở đây là Neo4j Browser **`7475`** và Bolt **`7688`** (đổi bằng
-`NEO4J_HTTP_PORT`, `NEO4J_BOLT_PORT`, đã có trong `config.py`). APOC là tùy chọn, tắt mặc định.
-
-## 9. Tiếp theo
-
-Xem [`doc_ai/NEXT_STEPS.md`](doc_ai/NEXT_STEPS.md): thiết kế Character Extraction & Resolution,
-JSON nhân vật tích lũy theo chương và các trường được lưu vào Neo4j.
+- [x] **Book extraction** — HTML/EPUB/TXT to validated chapters and paragraph IDs.
+- [x] **Chapter-by-chapter ingestion** — summaries, WHO IS WHO / WHERE IS WHERE, characters,
+      relationships, locations and scene maps, each step validated by code.
+- [x] **Neo4j `Character` nodes** written at the end of a run.
+- [ ] **Full POV graph in Neo4j** — relationships, locations, scenes, events, utterances, claims and
+      knowledge acquisition.
+- [ ] **Knowledge timeline** — what each character believes, and when it changes.
+- [ ] **Full books and series** — complete runs, cross-book identity resolution and longer memory.
+- [ ] **POV narrator** — retell chapters conditioned on a character's knowledge at that point.

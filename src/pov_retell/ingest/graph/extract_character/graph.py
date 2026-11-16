@@ -5,11 +5,18 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from pov_retell.infrastructure.llm import JsonLLM
-from pov_retell.ingest.graph.extract_character import location, logic, relationship, scene_map
+from pov_retell.ingest.graph.extract_character import (
+    location,
+    logic,
+    relationship,
+    scene_map,
+    snapshot,
+)
 from pov_retell.ingest.graph.extract_character.model import ExtractCharacterState
 from pov_retell.ingest.graph.summarize_chapter.logic import format_previous_context
+from pov_retell.ingest.model import GraphWriter
 
-EXTRACT_NODES_PER_CHAPTER = 9
+EXTRACT_NODES_PER_CHAPTER = 10
 
 
 def extract_character_recursion_limit(chapter_count: int) -> int:
@@ -19,6 +26,7 @@ def extract_character_recursion_limit(chapter_count: int) -> int:
 def build_extract_character_graph(
     llm: JsonLLM,
     on_step: Callable[[str], None] | None = None,
+    writer: GraphWriter | None = None,
 ) -> CompiledStateGraph[ExtractCharacterState, Any, ExtractCharacterState, ExtractCharacterState]:
     def report(message: str) -> None:
         if on_step is not None:
@@ -40,6 +48,7 @@ def build_extract_character_graph(
             "locations": [],
             "next_location_number": 1,
             "scenes": [],
+            "scene_history": [],
         }
 
     def extract_characters(state: ExtractCharacterState) -> ExtractCharacterState:
@@ -177,7 +186,7 @@ def build_extract_character_graph(
             state["locations"],
             state["identity_redirects"],
         )
-        return {"scenes": records}
+        return {"scenes": records, "scene_history": [*state["scene_history"], *records]}
 
     def save_json(state: ExtractCharacterState) -> ExtractCharacterState:
         chapter = state["chapters"][state["chapter_index"]]
@@ -220,6 +229,22 @@ def build_extract_character_graph(
             directory / "chapters" / f"{chapter.unit_id}.scenes.json",
             scene_records,
         )
+        logic.save_json(
+            directory / "scenes.json",
+            [
+                snapshot.resolve_scene(s, state["identity_redirects"]).model_dump()
+                for s in state["scene_history"]
+            ],
+        )
+        return {}
+
+    def save_graph(state: ExtractCharacterState) -> ExtractCharacterState:
+        chapter = state["chapters"][state["chapter_index"]]
+        if writer is not None:
+            report(f"save_graph {chapter.unit_id}")
+            writer.write_chapter(
+                state["book_id"], state["run_id"], snapshot.chapter_snapshot(state)
+            )
         return {"chapter_index": state["chapter_index"] + 1}
 
     def next_step(state: ExtractCharacterState) -> Literal["next_chapter", "done"]:
@@ -237,6 +262,7 @@ def build_extract_character_graph(
         extract_scenes,
         validate_scenes,
         save_json,
+        save_graph,
     ):
         graph.add_node(node.__name__, node)
     graph.add_edge(START, "initialize")
@@ -249,7 +275,8 @@ def build_extract_character_graph(
     graph.add_edge("validate_locations", "extract_scenes")
     graph.add_edge("extract_scenes", "validate_scenes")
     graph.add_edge("validate_scenes", "save_json")
+    graph.add_edge("save_json", "save_graph")
     graph.add_conditional_edges(
-        "save_json", next_step, {"next_chapter": "extract_characters", "done": END}
+        "save_graph", next_step, {"next_chapter": "extract_characters", "done": END}
     )
     return graph.compile()

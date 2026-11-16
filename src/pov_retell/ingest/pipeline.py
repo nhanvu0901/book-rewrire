@@ -1,30 +1,28 @@
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, cast
 from uuid import uuid4
 
 from pov_retell.infrastructure.llm import JsonLLM, TextLLM
-from pov_retell.ingest.graph.extract_character import logic
 from pov_retell.ingest.graph.extract_character.graph import (
     build_extract_character_graph,
     extract_character_recursion_limit,
 )
+from pov_retell.ingest.graph.extract_character.model import ExtractCharacterState
 from pov_retell.ingest.graph.summarize_chapter.graph import (
     build_summarize_chapter_graph,
     summarize_chapter_recursion_limit,
 )
-from pov_retell.ingest.model import IngestResult
+from pov_retell.ingest.model import Chapter, GraphWriter, IngestResult
 from pov_retell.ingest.source import load_chapters, validate_directory_name
 
-
-class CharacterWriter(Protocol):
-    def write_characters(self, book_id: str, run_id: str, rows: list[dict[str, Any]]) -> None: ...
+FAILURE_MESSAGE_LIMIT = 500
 
 
 def ingest_book(
     book_id: str,
     character_llm: JsonLLM,
-    writer: CharacterWriter | None,
+    writer: GraphWriter | None,
     *,
     summary_llm: TextLLM,
     extracted_dir: Path,
@@ -42,6 +40,49 @@ def ingest_book(
     output_dir.mkdir(parents=True, exist_ok=False)
     if on_step is not None:
         on_step(f"Run {run_id}: {output_dir}")
+        on_step("skip_neo4j" if writer is None else "save_graph after each chapter")
+    if writer is None:
+        final = _run_graphs(
+            book_id, run_id, title, chapters, output_dir, character_llm, summary_llm, None, on_step
+        )
+    else:
+        writer.start_run(book_id, run_id, title, [c.unit_id for c in chapters])
+        try:
+            final = _run_graphs(
+                book_id,
+                run_id,
+                title,
+                chapters,
+                output_dir,
+                character_llm,
+                summary_llm,
+                writer,
+                on_step,
+            )
+        except Exception as exc:
+            writer.fail_run(book_id, run_id, f"{type(exc).__name__}: {exc}"[:FAILURE_MESSAGE_LIMIT])
+            raise
+        writer.finish_run(book_id, run_id)
+    return IngestResult(
+        book_id=book_id,
+        run_id=run_id,
+        characters_file=final["output_dir"] / "characters.json",
+        character_count=len(final["characters"]),
+    )
+
+
+def _run_graphs(
+    book_id: str,
+    run_id: str,
+    title: str,
+    chapters: list[Chapter],
+    output_dir: Path,
+    character_llm: JsonLLM,
+    summary_llm: TextLLM,
+    writer: GraphWriter | None,
+    on_step: Callable[[str], None] | None,
+) -> ExtractCharacterState:
+    metadata: dict[str, Any] = {"book_id": book_id, "run_id": run_id}
     if on_step is not None:
         on_step(f"Build summarize_chapter graph: model={getattr(summary_llm, 'model', 'unknown')}")
     # WHO IS WHO / WHERE IS WHERE card updates need JSON, so they use the extract client.
@@ -51,7 +92,7 @@ def ingest_book(
         {
             "recursion_limit": summarize_chapter_recursion_limit(len(chapters)),
             "run_name": "summarize_chapter",
-            "metadata": {"book_id": book_id, "run_id": run_id},
+            "metadata": metadata,
         },
     )
     if on_step is not None:
@@ -59,7 +100,7 @@ def ingest_book(
         on_step(
             f"Build extract_character graph: model={getattr(character_llm, 'model', 'unknown')}"
         )
-    character_graph = build_extract_character_graph(character_llm, on_step)
+    character_graph = build_extract_character_graph(character_llm, on_step, writer)
     final = character_graph.invoke(
         {
             "book_id": book_id,
@@ -72,23 +113,7 @@ def ingest_book(
         {
             "recursion_limit": extract_character_recursion_limit(len(chapters)),
             "run_name": "extract_character",
-            "metadata": {"book_id": book_id, "run_id": run_id},
+            "metadata": metadata,
         },
     )
-    if writer is None:
-        if on_step is not None:
-            on_step("skip_neo4j")
-    else:
-        if on_step is not None:
-            on_step("save_neo4j")
-        writer.write_characters(
-            book_id,
-            run_id,
-            logic.character_rows(final["characters"]),
-        )
-    return IngestResult(
-        book_id=book_id,
-        run_id=run_id,
-        characters_file=final["output_dir"] / "characters.json",
-        character_count=len(final["characters"]),
-    )
+    return cast(ExtractCharacterState, final)

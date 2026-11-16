@@ -74,6 +74,7 @@ every review is committed.
 | [T-0012](T-0012-running-list-quote-normalization.md) | Running lists treat straight and curly quotes as the same name | verified | Antigravity (Gemini 4 Argon) | 2026-10-28 |
 | [T-0013](T-0013-running-list-changes-only.md) | WHO IS WHO and WHERE IS WHERE return changes only; Revision 2 moves card updates to GLM | done | Claude (at the user's request) | 2026-10-28 |
 | [T-0014](T-0014-transient-retry.md) | Retry overloaded or unreachable providers with exponential backoff | done | Claude (at the user's request) | 2026-10-28 |
+| [T-0015](T-0015-neo4j-graph-per-chapter.md) | Write the story graph to Neo4j after each chapter | done | Claude (at the user's request) | 2026-11-16 |
 
 ## Recommended order
 
@@ -86,3 +87,7 @@ T-0002 to T-0008 are verified offline (2026-10-25).
 T-0010 is closed (2026-10-28): the user's own 8-slide deck replaced Revision 5.
 T-0011 (remove ScaleDown) is verified (2026-10-26).
 T-0009 waits for the user's choice.
+
+Roadmap (user, 2026-11-16, Claude implements at the user's request), stacked branches:
+T-0013 Revision 2 → T-0014 → T-0015 (graph per chapter) → T-0016 (events and claims) →
+T-0017 (knowledge timeline). Merge them in this order.

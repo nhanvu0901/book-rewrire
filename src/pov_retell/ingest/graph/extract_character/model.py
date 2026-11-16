@@ -148,4 +148,5 @@ class ExtractCharacterState(TypedDict, total=False):
     next_location_number: int
     proposed_scenes: SceneMapResponse
     scenes: list[SceneSegmentRecord]
+    scene_history: list[SceneSegmentRecord]
     output_dir: Path

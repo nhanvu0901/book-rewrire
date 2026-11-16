@@ -18,7 +18,7 @@ from pov_retell.book.pipeline import extract_book
 from pov_retell.config import Settings
 from pov_retell.infrastructure.llm import LLMError, OpenRouterClient
 from pov_retell.infrastructure.neo4j_store import (
-    Neo4jCharacterWriter,
+    Neo4jGraphWriter,
     Neo4jUnavailable,
     check_health,
     connect,
@@ -65,13 +65,13 @@ def extract(
 def ingest(
     book_id: str = typer.Argument(..., help="Book id of an extraction made by `pov extract`"),
     neo4j: bool = typer.Option(
-        True, "--neo4j/--no-neo4j", help="Write Character nodes to Neo4j after the last chapter"
+        True, "--neo4j/--no-neo4j", help="Write the story graph to Neo4j after each chapter"
     ),
 ) -> None:
-    """Summarize chapters, extract characters, save JSON and optionally Neo4j nodes."""
+    """Summarize chapters, extract the story graph, save JSON and optionally write Neo4j."""
     settings = Settings()  # type: ignore[call-arg]
 
-    def run(writer: Neo4jCharacterWriter | None) -> IngestResult:
+    def run(writer: Neo4jGraphWriter | None) -> IngestResult:
         return ingest_book(
             book_id,
             OpenRouterClient(
@@ -100,7 +100,7 @@ def ingest(
             driver = connect(settings)
             with driver:
                 check_health(driver)
-                result = run(Neo4jCharacterWriter(driver))
+                result = run(Neo4jGraphWriter(driver))
         else:
             result = run(None)
     except (Neo4jUnavailable, Neo4jError, LLMError, OSError, ValueError) as exc:

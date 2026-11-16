@@ -157,7 +157,7 @@ def test_ingest_passes_only_preceding_who_is_who_where_is_where_and_chapter_summ
     }
     assert steps.index("save_summary u03") < steps.index("save_book_memory")
     assert steps.index("save_book_memory") < steps.index("extract_characters u01")
-    assert steps.index("save_characters_json u03: 2 characters") < steps.index("save_neo4j")
+    assert steps.index("save_characters_json u03: 2 characters") < steps.index("save_graph u03")
 
 
 def test_summary_failure_keeps_saved_summaries_and_prevents_extraction(tmp_path: Path) -> None:

@@ -129,11 +129,38 @@ def test_complete_graph_workflow_records_all_responses_with_mock_transport(
     monkeypatch.setattr(audit, "Settings", lambda: configured)
     replies = [
         "Mara and the captain were introduced.",
-        "Mara | - | friend of Jo\nthe masked captain | - | cautious woman",
-        "The Gate | - | stone gate",
+        json.dumps(
+            {
+                "add": [
+                    {"name": "Mara", "other_names": [], "card": "friend of Jo"},
+                    {"name": "the masked captain", "other_names": [], "card": "cautious woman"},
+                ],
+                "update": [],
+            }
+        ),
+        json.dumps(
+            {"add": [{"name": "The Gate", "other_names": [], "card": "stone gate"}], "update": []}
+        ),
         "The captain revealed she was Mara.",
-        "Mara | the masked captain | cautious woman and friend of Jo",
-        "The Gate | - | stone gate\nGreat Hall | - | hall inside the gate",
+        json.dumps(
+            {
+                "add": [],
+                "update": [
+                    {
+                        "id": "C002",
+                        "name": "the masked captain",
+                        "other_names": [],
+                        "card": "cautious woman revealed as Mara",
+                    }
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "add": [{"name": "Great Hall", "other_names": [], "card": "hall inside the gate"}],
+                "update": [],
+            }
+        ),
         "The masked captain revealed she was Mara.",
         json.dumps(
             {

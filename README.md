@@ -37,7 +37,7 @@ already read the ending can easily spoil it. So the project's rule is:
 
 > **Model what characters know, not just where they were.**
 
-## The POV graph (target design)
+## The POV graph
 
 The graph has four layers. Each layer adds one kind of fact about the story.
 
@@ -59,13 +59,19 @@ graph LR
 | 1 · People | `Character` | Who exists, their names, aliases and relationships. |
 | 2 · What happened | `Event`, `Location` | What happened, who took part, where, and in what order. |
 | 3 · What was said | `Utterance`, `Claim` | What someone said, kept apart from whether it is true. |
-| 4 · What was learned | `Knowledge acquisition` | How and when a character learned a claim (saw, heard, was told, inferred) and what they believe about it. |
+| 4 · What was learned | `KnowledgeAcquisition` | How and when a character got a claim, and what they believe about it (see the seven channels below). |
 
 Hearing something, seeing something, and knowing it are different. Layer 4 lets a narrator
 receive only the knowledge that the chosen character has *at the chosen point in the story*.
 
-> **Status:** this is the design. Today the pipeline extracts characters, relationships, locations
-> and scene maps to JSON, and writes only `Character` nodes to Neo4j. See [Roadmap](#roadmap).
+A character can get a claim through seven **channels**: `prior` (knew it before the story),
+`witnessed`, `told`, `read`, `overheard`, `inferred`, and `learns_truth` (finds out it is true or
+false). Each acquisition also has a **stance**: `believes`, `doubts` or `disbelieves`. A `Claim`
+node stores the book's truth; what a character knows comes only from their acquisitions.
+
+> **Status:** all four layers are extracted chapter by chapter and written to Neo4j, and
+> `pov knowledge` shows a character's view at any point. Verified offline and against a local
+> Neo4j; not yet run on a real book with a live model. See [Roadmap](#roadmap).
 
 ## What we learned building it
 
@@ -109,7 +115,8 @@ flowchart LR
     X -->|pov ingest| SG["summarize_chapter<br/>graph"]
     SG --> EG["extract_character<br/>graph"]
     EG --> J["JSON per run"]
-    EG -->|optional| N[("Neo4j<br/>Character nodes")]
+    EG -->|after each chapter| N[("Neo4j<br/>story graph")]
+    J -->|pov knowledge| V["A character's view<br/>at chapter / scene"]
 ```
 
 One rule holds across the project: **code keeps the truth, the LLM only proposes.** The LLM never
@@ -129,7 +136,7 @@ answer, and rejects (rather than silently repairs) anything that does not fit.
 A paragraph ID points to a source block, which can hold several sentences. IDs are stable within
 one source file only: the HTML, EPUB and TXT editions of the same book split paragraphs differently.
 
-### 2. `pov ingest` — chapters to characters, places and scenes
+### 2. `pov ingest` — chapters to the story graph
 
 Ingestion validates the saved chapter files against `book.json`, creates a fresh run directory,
 then runs two LangGraph graphs, each looping over the chapters.
@@ -148,13 +155,16 @@ initialize -> summarize_chapter -> update_who_is_who -> update_where_is_where
   rejects unknown or duplicate entries, and merges the changes.
 - `summarize_book` runs once after the last chapter and writes the book's `core_memory`.
 
-**Extraction graph** (4 calls per chapter):
+**Extraction graph** (6 calls per chapter):
 
 ```text
 initialize -> extract_characters -> validate_characters
            -> extract_relationships -> validate_relationships
            -> extract_locations -> validate_locations
-           -> extract_scenes -> validate_scenes -> save_json --(next chapter)--> extract_characters
+           -> extract_scenes -> validate_scenes
+           -> extract_events -> validate_events
+           -> extract_knowledge -> validate_knowledge
+           -> save_json -> save_graph --(next chapter)--> extract_characters
 ```
 
 Each call for chapter *N* receives the original chapter text plus context through chapter *N−1*
@@ -167,10 +177,15 @@ current or later summaries.
 | Relationships | `start` / `end` operations between characters, with paragraph evidence. | Existing, distinct characters; evidence from the current chapter; `end` must close an open relationship. |
 | Locations | New and updated places, with `part_of` containment. | `loc_NNN` IDs, valid references, no self-reference or containment cycles. |
 | Scenes | Ordered scene segments covering the chapter. | Full paragraph coverage with no gaps or overlaps; viewpoint characters are present; valid time relation (`continues`, `later`, `parallel`, `flashback`, `time_jump`). |
+| Events & claims | Claims, events, utterances (with an exact quote) and truth changes of earlier claims. | Evidence inside the scene segment; participants and speakers are present; the quote is found in the cited paragraphs; claims are not duplicated; `claim_NNN`, `uNN_eM`, `uNN_qM` IDs. |
+| Knowledge | Who acquires which claim, by which channel, with which stance. | `witnessed` needs an event, `told` an addressee of spoken words, `overheard` a present non-addressee, `read` written words; presence in the scene (except `prior`); `learns_truth` only for resolved claims; repeats are dropped. |
 
-For a book of *N* chapters this is `3N + 1` summary calls and `4N` extraction calls before retries.
-Only after the last chapter does the run write selected `Character` properties to Neo4j
-(skip with `--no-neo4j`). There is no checkpoint or resume: each run starts from chapter 1.
+For a book of *N* chapters this is `3N + 1` summary calls and `6N` extraction calls before retries.
+
+After every chapter, `save_graph` makes the run's Neo4j graph equal to the JSON state so far, in
+one transaction (merged characters disappear, their edges move to the survivor). An `IngestRun`
+node shows `running`, `complete` or `failed`, so a partial run is visible. Skip Neo4j with
+`--no-neo4j`. There is no checkpoint or resume: each run starts from chapter 1.
 
 ---
 
@@ -191,11 +206,26 @@ uv run pov show my-book u04           # paragraphs of unit u04
 # 2a. Ingest without Neo4j (JSON output only)
 uv run pov ingest my-book --no-neo4j
 
-# 2b. Or ingest and write Character nodes to Neo4j
+# 2b. Or ingest and write the story graph to Neo4j after each chapter
 make neo4j-up                         # Neo4j 5 Community, waits for a healthy container
 uv run pov neo4j-status               # connectivity check only
 uv run pov ingest my-book
 make neo4j-shell                      # cypher-shell; `make neo4j-down` to stop
+
+# 3. What does a character know at a point in the story? (latest run by default)
+uv run pov knowledge my-book "Mara" --until u05      # up to the end of chapter u05
+uv run pov knowledge my-book char_003 --until u05_s2 # up to scene 2 of u05
+uv run pov knowledge my-book "Mara" --json           # for a narrator or other tools
+uv run pov knowledge my-book "Mara" --reveal         # also show the book's truth (spoilers)
+```
+
+In Neo4j, one character's knowledge up to a chapter (property values are examples):
+
+```cypher
+MATCH (c:Character {book_id: 'my-book', canonical_name: 'Mara'})
+      -[:ACQUIRED]->(k:KnowledgeAcquisition)-[:ABOUT]->(claim:Claim)
+WHERE k.channel = 'prior' OR toInteger(substring(k.chapter_id, 1)) <= 5
+RETURN k.chapter_id, k.channel, k.stance, claim.statement ORDER BY k.order
 ```
 
 `pov extract` accepts a path or an `http(s)` URL. Extracting a *different* file under an existing
@@ -233,9 +263,11 @@ LLM clients are wrapped for LangSmith tracing. LangSmith reads the process envir
 └── ingest/<book_id>/<run_id>/
     ├── summaries/uNN.summary.json     chapter summary + WHO IS WHO + WHERE IS WHERE
     ├── summaries/book_memory.json     final lists + core_memory
-    ├── chapters/uNN.*.proposed.json   parsed LLM proposals (characters, relationships, locations, scenes)
-    ├── chapters/uNN.*.json            accepted snapshots after each chapter
-    ├── characters.json, relationships.json, locations.json
+    ├── chapters/uNN.*.proposed.json   parsed LLM proposals (characters, relationships, locations,
+    │                                  scenes, events, knowledge)
+    ├── chapters/uNN.*.json            accepted records after each chapter
+    ├── characters.json, relationships.json, locations.json, scenes.json
+    ├── claims.json, events.json, utterances.json, knowledge.json
     └── identity_redirects.json        merged IDs -> surviving IDs
 ```
 
@@ -245,18 +277,20 @@ LLM clients are wrapped for LangSmith tracing. LangSmith reads the process envir
 
 ```text
 src/pov_retell/
-├── cli.py                     `pov` commands: extract, show, ingest, neo4j-status
+├── cli.py                     `pov` commands: extract, show, ingest, knowledge, neo4j-status
 ├── config.py                  settings from .env
 ├── book/                      pov extract: load, candidates, LLM map, cut, paragraphs, output
 ├── ingest/
 │   ├── pipeline.py            runs the summary graph, then the extraction graph, then Neo4j
-│   ├── source.py, model.py    validated chapter input and run result
+│   ├── source.py, model.py    validated chapter input, run result, graph-writer protocol
+│   ├── timeline.py            a character's knowledge at a chapter or scene (`pov knowledge`)
 │   └── graph/
 │       ├── summarize_chapter/ graph, models, logic and prompt/
-│       └── extract_character/ graph, models, identity, relationship, location, scene_map and prompt/
+│       └── extract_character/ graph, models, identity, relationship, location, scene_map,
+│                              events, knowledge, snapshot and prompt/
 └── infrastructure/
     ├── llm.py                 OpenRouter JSON and text clients with validation and retries
-    └── neo4j_store.py         connectivity and Character writes
+    └── neo4j_store.py         connectivity and the per-chapter story-graph writer
 docker/compose.yml             Neo4j only (Compose project `book-clone-dev`)
 doc/presentation/              slide deck, assets and talk script
 AI-work/                       project context, tickets and agent roles
@@ -272,7 +306,7 @@ A good reading order: `book/models.py` → `book/pipeline.py` → `ingest/pipeli
 make test             # offline tests: no real book, API key or Neo4j needed
 make lint             # ruff check + ruff format --check
 make typecheck        # mypy --strict
-make test-neo4j       # opt-in: connectivity and temporary Character writes
+make test-neo4j       # opt-in: connectivity and temporary story-graph writes
 make test-openrouter  # opt-in: sends one real, billable OpenRouter request
 ```
 
@@ -289,9 +323,11 @@ Work is organised as tickets in [`AI-work/tickets/`](AI-work/tickets/README.md),
 - [x] **Book extraction** — HTML/EPUB/TXT to validated chapters and paragraph IDs.
 - [x] **Chapter-by-chapter ingestion** — summaries, WHO IS WHO / WHERE IS WHERE, characters,
       relationships, locations and scene maps, each step validated by code.
-- [x] **Neo4j `Character` nodes** written at the end of a run.
-- [ ] **Full POV graph in Neo4j** — relationships, locations, scenes, events, utterances, claims and
-      knowledge acquisition.
-- [ ] **Knowledge timeline** — what each character believes, and when it changes.
+- [x] **Full POV graph in Neo4j** — characters, relationships, locations, scenes, events,
+      utterances, claims and knowledge acquisitions, written after each chapter.
+- [x] **Knowledge timeline** — what each character believes, how and when it changes
+      (`pov knowledge`).
+- [ ] **Live check on a real book** — run the new events and knowledge steps with the chosen
+      model and audit the results against the text.
 - [ ] **Full books and series** — complete runs, cross-book identity resolution and longer memory.
 - [ ] **POV narrator** — retell chapters conditioned on a character's knowledge at that point.

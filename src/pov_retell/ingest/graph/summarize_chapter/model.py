@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 from pov_retell.ingest.model import Chapter
 
 SummaryText = Annotated[str, StringConstraints(min_length=1, pattern=r"\S")]
+# No regex pattern here: strict structured outputs may reject it.
+CardText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class Card(BaseModel):
@@ -13,13 +15,13 @@ class Card(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    name: SummaryText
-    other_names: list[SummaryText]
-    card: SummaryText
+    name: CardText
+    other_names: list[CardText]
+    card: CardText
 
 
 class CardUpdate(Card):
-    id: SummaryText
+    id: CardText
 
 
 class CardChanges(BaseModel):
@@ -36,23 +38,21 @@ def upsert_cards(current: dict[str, Card], update: dict[str, Card]) -> dict[str,
     return {**current, **update}
 
 
-class SummarizeChapterResponse(BaseModel):
+class ChapterSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     chapter_summary: SummaryText
-    who_is_who: SummaryText
-    where_is_where: SummaryText
-
-
-class ChapterSummary(SummarizeChapterResponse):
+    # Rendered card lists; empty until a chapter names a character or place.
+    who_is_who: str
+    where_is_where: str
     chapter_id: SummaryText
 
 
 class BookMemory(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    who_is_who: SummaryText
-    where_is_where: SummaryText
+    who_is_who: str
+    where_is_where: str
     core_memory: SummaryText
 
 
@@ -66,7 +66,6 @@ class SummarizeChapterState(TypedDict, total=False):
     where_cards: Annotated[dict[str, Card], upsert_cards]
     who_is_who: str
     where_is_where: str
-    proposed: SummarizeChapterResponse
     summary: ChapterSummary
     summaries: list[ChapterSummary]
     book_memory: BookMemory

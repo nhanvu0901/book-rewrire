@@ -10,6 +10,7 @@ from test_character_ingest import (
     character,
     extraction,
     make_extraction,
+    split_card_answers,
     summary_client,
 )
 from test_llm import make
@@ -61,7 +62,7 @@ def test_one_relationship_call_per_chapter_after_character_step_and_prompt_marke
             ["Rafe waited alone."],
         ],
     )
-    summaries = ScriptedLLM(
+    texts, cards = split_card_answers(
         [
             "SUMMARY_CH1",
             {"add": [{"name": "Mara", "other_names": [], "card": "WHO_CH1"}], "update": []},
@@ -113,8 +114,10 @@ def test_one_relationship_call_per_chapter_after_character_step_and_prompt_marke
             rel_response(
                 rel_change("end", "char_003", "char_004", "servant of", ["u03_p001"]),
             ),
-        ]
+        ],
+        cards=cards,
     )
+    summaries = ScriptedLLM(texts)
     steps: list[str] = []
     result = ingest_book(
         "sample",
@@ -288,6 +291,7 @@ def test_relationship_validation_rejects_and_retries_with_reason(
     make_extraction(tmp_path, [["Mara and Jo met."]])
     client, transport = make(
         [
+            *[json.dumps({"add": [], "update": []})] * 2,  # WHO/WHERE card updates for u01
             json.dumps(extraction(character("Mara", "new_1"), character("Jo", "new_2"))),
             json.dumps(rel_response(bad_change)),
             json.dumps(
@@ -320,8 +324,8 @@ def test_relationship_validation_rejects_and_retries_with_reason(
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert len(transport.requests) == 5
-    retry_msg = transport.requests[2]["messages"][-1]["content"]
+    assert len(transport.requests) == 7
+    retry_msg = transport.requests[4]["messages"][-1]["content"]
     assert "Rejected:" in retry_msg and expected_reason in retry_msg
 
 

@@ -20,10 +20,32 @@ from pov_retell.ingest.pipeline import ingest_book
 T = TypeVar("T", bound=BaseModel)
 
 
+def is_card_answer(item: object) -> bool:
+    return isinstance(item, dict) and set(item) == {"add", "update"}
+
+
+def split_card_answers(
+    responses: Sequence[str | dict[str, Any] | Exception],
+) -> tuple[list[str | dict[str, Any] | Exception], list[dict[str, Any] | Exception]]:
+    """Split one interleaved script into summary-client texts and card-client answers."""
+    texts = [item for item in responses if not is_card_answer(item)]
+    cards: list[dict[str, Any] | Exception] = [
+        item for item in responses if isinstance(item, dict) and is_card_answer(item)
+    ]
+    return texts, cards
+
+
 class ScriptedLLM:
-    def __init__(self, responses: Sequence[str | dict[str, Any] | Exception]) -> None:
+    def __init__(
+        self,
+        responses: Sequence[str | dict[str, Any] | Exception],
+        cards: Sequence[dict[str, Any] | Exception] = (),
+    ) -> None:
         self.responses = copy.deepcopy(list(responses))
         self._cursor = 0
+        # WHO IS WHO / WHERE IS WHERE card updates; an empty queue answers "no changes".
+        self.cards = copy.deepcopy(list(cards))
+        self.card_prompts: list[str] = []
         self.prompts: list[str] = []
         self.all_prompts: list[str] = []
         self.calls: list[tuple[str, str]] = []
@@ -44,6 +66,24 @@ class ScriptedLLM:
     def complete_json(
         self, prompt: str, schema: type[T], check: Callable[[T], None] | None = None
     ) -> T:
+        if schema.__name__ == "CardChanges":
+            self.card_prompts.append(prompt)
+            if self.cards:
+                payload = self.cards.pop(0)
+            elif self._cursor < len(self.responses) and is_card_answer(
+                self.responses[self._cursor]
+            ):
+                # One fake serving both clients (graph tests): answers are interleaved.
+                payload = self.responses[self._cursor]
+                self._cursor += 1
+            else:
+                payload = {"add": [], "update": []}
+            if isinstance(payload, Exception):
+                raise payload
+            card_result = schema.model_validate(payload)
+            if check is not None:
+                check(card_result)
+            return card_result
         self.all_prompts.append(prompt)
         self.calls.append((schema.__name__, prompt))
         schema_keys = set(schema.model_fields)
@@ -97,11 +137,41 @@ class ScriptedLLM:
 
 
 class RecordingWriter:
-    def __init__(self) -> None:
-        self.saved: tuple[str, str, list[dict[str, Any]]] | None = None
+    """Implements `GraphWriter`. `saved` holds the last character rows of a complete run."""
 
-    def write_characters(self, book_id: str, run_id: str, rows: list[dict[str, Any]]) -> None:
-        self.saved = (book_id, run_id, copy.deepcopy(rows))
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str]] = []
+        self.snapshots: list[dict[str, Any]] = []
+        self.ids: tuple[str, str] | None = None
+        self.status: str | None = None
+        self.error: str | None = None
+
+    def start_run(self, book_id: str, run_id: str, title: str, chapter_ids: list[str]) -> None:
+        self.ids = (book_id, run_id)
+        self.status = "running"
+        self.events.append(("start", title))
+
+    def write_chapter(self, book_id: str, run_id: str, snapshot: dict[str, Any]) -> None:
+        assert (book_id, run_id) == self.ids and self.status == "running"
+        self.snapshots.append(copy.deepcopy(snapshot))
+        self.events.append(("chapter", snapshot["chapter_id"]))
+
+    def finish_run(self, book_id: str, run_id: str) -> None:
+        assert (book_id, run_id) == self.ids
+        self.status = "complete"
+        self.events.append(("finish", run_id))
+
+    def fail_run(self, book_id: str, run_id: str, error: str) -> None:
+        assert (book_id, run_id) == self.ids
+        self.status = "failed"
+        self.error = error
+        self.events.append(("fail", run_id))
+
+    @property
+    def saved(self) -> tuple[str, str, list[dict[str, Any]]] | None:
+        if self.status != "complete" or self.ids is None or not self.snapshots:
+            return None
+        return (*self.ids, self.snapshots[-1]["characters"])
 
 
 def make_extraction(root: Path, texts: list[list[str]]) -> Path:
@@ -151,12 +221,49 @@ def make_extraction(root: Path, texts: list[list[str]]) -> Path:
     return save_extraction(book, root / "extracted")
 
 
+class RecordingTransaction:
+    def __init__(self, driver: "RecordingDriver") -> None:
+        self.driver = driver
+
+    def run(self, query: str, parameters: dict[str, Any]) -> "RecordingTransaction":
+        self.driver.statements.append(query)
+        self.driver.rows = parameters["characters"]
+        self.driver.book_id = parameters["book_id"]
+        self.driver.run_id = parameters["run_id"]
+        return self
+
+    def consume(self) -> None:
+        return None
+
+
+class RecordingSession:
+    def __init__(self, driver: "RecordingDriver") -> None:
+        self.driver = driver
+
+    def __enter__(self) -> "RecordingSession":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+    def execute_write(self, work: Callable[[RecordingTransaction], None]) -> None:
+        assert not self.driver.closed
+        self.driver.transactions += 1
+        work(RecordingTransaction(self.driver))
+
+
 class RecordingDriver:
     def __init__(self) -> None:
         self.closed = False
         self.rows: list[dict[str, Any]] = []
         self.book_id = ""
         self.run_id = ""
+        self.statements: list[str] = []
+        self.queries: list[str] = []
+        self.transactions = 0
+
+    def session(self) -> RecordingSession:
+        return RecordingSession(self)
 
     def __enter__(self) -> "RecordingDriver":
         return self
@@ -171,10 +278,7 @@ class RecordingDriver:
         assert not self.closed
         if "dbms.components" in query:
             return [{"version": "5", "edition": "community"}], None, None
-        if "UNWIND" in query:
-            self.rows = parameters["rows"]
-            self.book_id = parameters["book_id"]
-            self.run_id = parameters["run_id"]
+        self.queries.append(query)
         return [], None, None
 
 
@@ -200,58 +304,26 @@ def extraction(*characters: dict[str, Any]) -> dict[str, Any]:
     return {"characters": list(characters)}
 
 
-def summary_client(chapter_count: int) -> ScriptedLLM:
-    responses: list[str | dict[str, Any] | Exception] = []
+def summary_cards(chapter_count: int) -> list[dict[str, Any] | Exception]:
+    """WHO IS WHO and WHERE IS WHERE answers, two per chapter, for the card client."""
+    cards: list[dict[str, Any] | Exception] = []
     for index in range(1, chapter_count + 1):
-        responses.append(f"Summary of chapter {index}.")
-        responses.append(
-            {
-                "add": [
-                    {
-                        "name": "Mara",
-                        "other_names": [],
-                        "card": f"traveler in chapter {index}",
-                    }
-                ],
-                "update": [],
-            }
-            if index == 1
-            else {
-                "add": [],
-                "update": [
-                    {
-                        "id": "C001",
-                        "name": "Mara",
-                        "other_names": [],
-                        "card": f"traveler in chapter {index}",
-                    }
-                ],
-            }
-        )
-        responses.append(
-            {
-                "add": [
-                    {
-                        "name": "The Gate",
-                        "other_names": [],
-                        "card": f"stone gate in chapter {index}",
-                    }
-                ],
-                "update": [],
-            }
-            if index == 1
-            else {
-                "add": [],
-                "update": [
-                    {
-                        "id": "P001",
-                        "name": "The Gate",
-                        "other_names": [],
-                        "card": f"stone gate in chapter {index}",
-                    }
-                ],
-            }
-        )
+        for card_id, name, kind in (
+            ("C001", "Mara", "traveler"),
+            ("P001", "The Gate", "stone gate"),
+        ):
+            entry = {"name": name, "other_names": [], "card": f"{kind} in chapter {index}"}
+            if index == 1:
+                cards.append({"add": [entry], "update": []})
+            else:
+                cards.append({"add": [], "update": [{"id": card_id, **entry}]})
+    return cards
+
+
+def summary_client(chapter_count: int) -> ScriptedLLM:
+    responses: list[str | dict[str, Any] | Exception] = [
+        f"Summary of chapter {index}." for index in range(1, chapter_count + 1)
+    ]
     responses.append("Core memory of the book.")
     return ScriptedLLM(responses)
 
@@ -262,7 +334,7 @@ def run_ingest(
     *,
     run_id: str = "run_test",
 ) -> tuple[Any, ScriptedLLM, ScriptedLLM, RecordingWriter]:
-    llm = ScriptedLLM(responses)
+    llm = ScriptedLLM(responses, cards=summary_cards(len(responses)))
     summaries = summary_client(len(responses))
     writer = RecordingWriter()
     result = ingest_book(
@@ -300,9 +372,16 @@ def test_ingest_extracts_full_profiles_once_per_chapter_and_preserves_absent_rec
     roster = json.loads(llm.prompts[1].split("<existing_characters_json>\n")[1].split("\n</")[0])
     assert roster[0]["attributes"]["gender"] == "female"
     assert roster[0]["character_id"] == "char_001"
-    assert len(summaries.prompts) == 7
+    assert len(summaries.prompts) == 3 and len(llm.card_prompts) == 4
     assert writer.saved is not None and len(writer.saved[2]) == 2
     assert "relationships" not in writer.saved[2][0]
+    assert writer.events == [
+        ("start", "The Gate"),
+        ("chapter", "u01"),
+        ("chapter", "u02"),
+        ("finish", "run_test"),
+    ]
+    assert [len(s["characters"]) for s in writer.snapshots] == [2, 2]
     assert all("relationships" not in record for record in records)
     for snapshot in (result.characters_file.parent / "chapters").glob("*.characters.json"):
         assert all("relationships" not in record for record in json.loads(snapshot.read_text()))
@@ -311,6 +390,7 @@ def test_ingest_extracts_full_profiles_once_per_chapter_and_preserves_absent_rec
         "characters.json",
         "relationships.json",
         "locations.json",
+        "scenes.json",
         "identity_redirects.json",
         "chapters",
         "summaries",
@@ -496,7 +576,8 @@ def test_ingest_without_a_writer_still_saves_json(tmp_path: Path) -> None:
         on_step=steps.append,
     )
     assert json.loads(result.characters_file.read_text())[0]["candidate_name"] == "Mara"
-    assert "skip_neo4j" in steps and "save_neo4j" not in steps
+    assert "skip_neo4j" in steps and not any(step.startswith("save_graph u") for step in steps)
+    assert (result.characters_file.parent / "scenes.json").exists()
 
 
 def test_existing_run_is_not_overwritten(tmp_path: Path) -> None:
@@ -540,11 +621,14 @@ def test_cli_selects_summary_and_full_profile_models_and_closes_driver(
     ]
     if api_error:
         assert result.exit_code == 1 and "Unavailable" in result.output
-        assert driver.rows == []
+        assert driver.rows == [] and driver.transactions == 0
+        assert any("status = 'failed'" in query for query in driver.queries)
     else:
         assert result.exit_code == 0, result.output
+        assert driver.transactions == 1
         assert driver.rows[0]["canonical_name"] == "Mara"
         assert driver.rows[0]["gender"] == "female"
+        assert any("status = 'complete'" in query for query in driver.queries)
         assert "Build summarize_chapter graph: model=example/summary" in result.output
         assert "Build extract_character graph: model=example/characters" in result.output
         assert "attributes_model=" not in result.output
@@ -575,7 +659,7 @@ def test_many_chapters_complete_in_numeric_order(tmp_path: Path) -> None:
         ],
     )
     assert "Current chapter: u10" in llm.prompts[9]
-    assert len(summaries.prompts) == 52
+    assert len(summaries.prompts) == 18 and len(llm.card_prompts) == 34
     assert (result.characters_file.parent / "chapters/u17.characters.json").exists()
 
 

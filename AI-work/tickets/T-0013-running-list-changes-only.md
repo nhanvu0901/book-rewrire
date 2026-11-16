@@ -1,9 +1,9 @@
 ---
 id: T-0013
 title: WHO IS WHO and WHERE IS WHERE return changes only, merged by a reducer
-status: changes_requested
-owner: Antigravity (Gemini 4 Argon)
-branch: ticket/T-0013-changes-only-lists
+status: done
+owner: Claude (at the user's request)
+branch: ticket/T-0013-glm-card-updates
 priority: medium
 created: 2026-10-27
 updated: 2026-10-28
@@ -277,3 +277,174 @@ them from Git tracking in the next commit; the files stay on disk, untracked.
 - State now keeps both `who_cards` and the rendered `who_is_who` text. This works, but the
   text could be rendered from the cards in `summarize_book` alone.
 - The branch is stacked on `ticket/T-0012-quote-normalization`, which fits `depends_on`.
+
+## Revision 2 (2026-10-28): card updates run on GLM with structured outputs, and fix F1–F4
+
+Revision 1 is already merged into `main` (PR #2), while its review said
+`changes_requested`. This revision finishes it. Start from the up-to-date `main` on the
+branch `ticket/T-0013-glm-card-updates`.
+
+### Why
+
+Revision 1 calls `complete_json` on the summary client. The summary model in `.env` is
+`nvidia/nemotron-3-ultra-550b-a55b:free`. On 2026-10-28 the PM read OpenRouter's public
+model list (`/api/v1/models` and the model's `/endpoints`). That model's only endpoint
+(Nvidia) lists `reasoning` and nothing else: no `response_format`, no
+`structured_outputs`. `z-ai/glm-5.3-flash`, the extract model, lists all three.
+
+The summary client does not pin a provider, so OpenRouter forwards the request and ignores
+the JSON request. Only the prompt then asks for JSON, and that prompt contradicts itself
+(F1). A real run is therefore likely to fail at u01 with `LLMError`. This was not measured
+live.
+
+### User decisions (2026-10-28)
+
+- Option 1. The WHO IS WHO and WHERE IS WHERE update calls use GLM with structured outputs
+  and a pinned provider, like the extract client from T-0005.
+- The chapter summary stays on the summary model (`OPENROUTER_SUMMARIZE_CHAPTER_MODEL`).
+- Fix review findings F1–F4 in the same revision.
+
+### PM recommendations (the user may veto)
+
+- Reuse the existing extract client and its settings (`OPENROUTER_EXTRACT_CHARACTER_*`)
+  for the card updates. Add no new `.env` keys. See Open question R2-1.
+- `CardChanges` must use the same string constraints as the extract models
+  (`strip_whitespace=True, min_length=1`). `SummaryText` adds a regex `pattern`, and a
+  strict provider may reject it.
+
+### Requirements
+
+1. `build_summarize_chapter_graph(summary_llm: TextLLM, card_llm: JsonLLM, on_step=...)`.
+   `summarize_chapter` and `summarize_book` use `summary_llm`. `update_who_is_who` and
+   `update_where_is_where` use `card_llm`. Remove `SummarizeLLM`.
+2. `ingest_book` takes the card client and passes it on. `pov ingest` (`cli.py`) passes the
+   existing extract client, so GLM runs with its provider pin, structured outputs and
+   reasoning settings.
+3. `Card` and `CardUpdate` text fields use
+   `Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]`. Their strict
+   JSON schema (`strict_json_schema(CardChanges)`) has no `pattern` keyword.
+4. **F1:** rewrite the format paragraph in both prompts:
+   - `prompt/update_who_is_who.py:16-18`;
+   - `prompt/update_where_is_where.py:13-15`.
+
+   Each entry has three JSON fields: `name`, `other_names` (a list, empty when there
+   are none) and `card`. Keep the word limits (40 words for characters, 30 for places)
+   and all card rules. Nothing in the prompts may ask for `|`-separated lines.
+5. **F2:** remove the dead code listed in finding F2 and
+   `test_legacy_validators_compatibility`. These names must not appear anywhere in `src`
+   or `tests`: `validate_running_list`, `validate_who_is_who`, `validate_where_is_where`,
+   `_running_list_lines`, `_name_key`, `SummarizeChapterResponse`, `REMINDER`.
+6. **F3:** add graph-level tests:
+   - chapter 2's WHO update keeps failing and raises `LLMError`, and `u01.summary.json`
+     is still on disk;
+   - the same for the WHERE update;
+   - the same for an empty chapter summary.
+7. **F4:** the Completion report lists every deviation, the test count before and after,
+   and the commit hashes.
+
+### Acceptance criteria (Revision 2)
+
+- [ ] A test proves that the graph sends the card updates to `card_llm` and the summaries to
+      `summary_llm`. Use two separate fakes; each fails if it gets the other's call.
+- [ ] A test proves that `pov ingest` builds the card client from the
+      `OPENROUTER_EXTRACT_CHARACTER_*` settings, with `structured_outputs` and the
+      provider pin.
+- [ ] `strict_json_schema(CardChanges)` contains no `pattern`, and every object has
+      `additionalProperties: false`.
+- [ ] A prompt test: neither update prompt contains `separated by " | "` or
+      `exactly three fields separated`. Both contain `"add"`, `"update"` and
+      `"other_names"`.
+- [ ] The search for the removed names in requirement 5 is empty.
+- [ ] The three failure tests of requirement 6 pass.
+- [ ] The full offline suite, `ruff check src tests`, `ruff format --check src tests` and
+      `mypy src` pass.
+
+### Verification
+
+```bash
+git fetch origin && git switch main && git pull --ff-only origin main
+git switch ticket/T-0013-glm-card-updates   # created by the PM from main
+uv run pytest -q
+uv run ruff check src tests && uv run ruff format --check src tests && uv run mypy src
+grep -rn "validate_running_list\|validate_who_is_who\|validate_where_is_where\|_running_list_lines\|_name_key\|SummarizeChapterResponse\|REMINDER" src tests
+git diff --check main
+```
+
+No live API calls or Neo4j writes. After the review, the PM suggests one real run of 1–2
+chapters, but only with the user's OK.
+
+### Open questions (Revision 2)
+
+- **R2-1.** Should the card updates get their own settings
+  (`OPENROUTER_RUNNING_LIST_MODEL`, provider, max tokens) instead of reusing the extract
+  settings? Default: no; reuse the extract client.
+- **R2-2.** The four Revision 1 open questions were answered with their defaults:
+  sequential nodes, no `merge`, no IDs in saved files. Question 4 (which client) is now
+  answered by this revision. Default: keep them.
+
+## Completion report (Revision 2, 2026-10-28)
+
+Implemented by Claude at the user's explicit request ("you do that"). The PM role normally
+does not write application code. This Completion report and any review of it come from the
+same agent, so another agent or the user should review it independently.
+
+Commit: `48b0c3c` on `ticket/T-0013-glm-card-updates` (from `main` `0d9bb2f`).
+
+### Changes
+
+- `graph.py`: `build_summarize_chapter_graph(llm: TextLLM, card_llm: JsonLLM, on_step)`.
+  `update_who_is_who` and `update_where_is_where` call `card_llm`.
+- `pipeline.py`: `ingest_book` passes `character_llm`, the extract client, as `card_llm`.
+  In `pov ingest` that client is GLM with the provider pin, structured outputs and
+  reasoning from `OPENROUTER_EXTRACT_CHARACTER_*`. `cli.py` is unchanged. `summary_llm`
+  is typed `TextLLM` again, and `SummarizeLLM` is removed from `llm.py`.
+- `model.py`: new `CardText` (`strip_whitespace=True, min_length=1`, no `pattern`) for
+  `Card` and `CardUpdate`. `SummarizeChapterResponse` and the `proposed` key are removed.
+  `ChapterSummary` defines its own fields.
+- Both update prompts: the format paragraph now describes the JSON fields `name`,
+  `other_names` and `card`, with the same word limits. The empty `*_REMINDER` constants
+  are removed.
+- `logic.py`: `_running_list_lines`, `validate_running_list`, `validate_who_is_who`,
+  `validate_where_is_where` and the `_name_key` alias are removed.
+
+### Deviations
+
+- **`ChapterSummary.who_is_who` / `where_is_where` and the same `BookMemory` fields accept an
+  empty string** (they were `SummaryText`). With changes-only replies, a chapter that names
+  no character or no place yet leaves the list empty. Revision 1 then crashed in
+  `validate_summary`. The tests exposed this once the card calls moved to a client whose
+  default answer is "no changes".
+- `cli.py` needed no change, because `ingest_book` already receives the extract client.
+- Test fakes: `ScriptedLLM` has a separate `cards` queue and `card_prompts` list, plus
+  `split_card_answers` and `summary_cards` helpers. Tests that used the real client with
+  a fake transport put the card answers first, because the summary graph runs before
+  extraction. Their request indexes moved by 2 per chapter.
+
+### Acceptance criteria (Revision 2)
+
+| Criterion | Evidence |
+| --- | --- |
+| Card updates go to `card_llm`, summaries go to `summary_llm` | `test_card_updates_go_to_the_card_client_and_summaries_to_the_summary_client`, using two fakes that fail on the other's call |
+| `pov ingest` uses the extract settings for cards | `ingest_book` passes `character_llm`. `test_cli_selects_summary_and_full_profile_models_and_closes_driver` already checks that client's settings. `test_ingest_extracts_full_profiles...` asserts `llm.card_prompts == 4` and `summaries.prompts == 3` |
+| Schema has no `pattern`; every object is strict | `test_card_changes_schema_has_no_regex_pattern_and_is_strict` |
+| Prompts ask for JSON, not `|` lines | `test_update_prompts_ask_for_json_entries_not_pipe_lines` |
+| Removed names | `grep` over `src tests` is empty |
+| Failures mid-run keep `u01` | `test_card_update_failure_in_chapter_two_keeps_chapter_one_saved[who_is_who / where_is_where]`, `test_summary_failure_in_chapter_two_keeps_chapter_one_saved` |
+| Suite, lint, format, types | below |
+
+Also added: `test_chapter_without_characters_or_places_saves_empty_lists`.
+
+### Commands and results
+
+- `uv run pytest -q`: **300 passed, 4 skipped** (`main` before: 293 passed; +7 new tests)
+- `uv run ruff check src tests`: all checks passed
+- `uv run ruff format --check src tests`: 65 files already formatted
+- `uv run mypy src`: no issues in 44 source files
+- `git diff --check`: clean
+
+### Not done
+
+- No live run. Next step, with the user's OK: 1–2 real chapters, to confirm that GLM
+  returns valid `CardChanges` with strict structured outputs.
+- The context-maintenance pass is pending. `AI-work/PROJECT_CONTEXT.md` has uncommitted
+  edits by the user, so it was not touched.

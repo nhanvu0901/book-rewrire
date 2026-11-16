@@ -59,10 +59,6 @@ def name_key(text: str) -> str:
     return " ".join(text.translate(_QUOTE_TRANSLATION).split()).casefold()
 
 
-def _name_key(text: str) -> str:
-    return name_key(text)
-
-
 def render_cards(cards: dict[str, Card], *, with_ids: bool) -> str:
     """Text form. With ids for the prompt; without ids for the saved summary file."""
     lines = []
@@ -126,64 +122,6 @@ def update_cards(
     )
     changes = llm.complete_json(prompt, CardChanges, check=lambda c: check_changes(c, cards))
     return changes_to_update(changes, cards, prefix)
-
-
-def _running_list_lines(text: str, label: str) -> list[str]:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if lines and lines[0].rstrip(":").strip().casefold() == label.casefold():
-        return lines[1:]
-    return lines
-
-
-def validate_running_list(
-    text: str,
-    previous_text: str = "",
-    *,
-    label: str,
-    item_kind: str,
-) -> str:
-    lines = _running_list_lines(text, label)
-    if not lines:
-        raise ValueError(f"{label} must not be blank")
-    parsed: list[tuple[str, str, str]] = []
-    for line in lines:
-        fields = [field.strip() for field in line.split("|")]
-        if len(fields) != 3 or not all(fields):
-            raise ValueError(
-                f"{label} line must have three non-empty fields separated by '|': {line!r}"
-            )
-        parsed.append((fields[0], fields[1], fields[2]))
-    surviving_keys = {
-        name_key(entry)
-        for first, second, _ in parsed
-        for entry in [first, *second.split(",")]
-        if entry.strip()
-    }
-    previous_names = [
-        line.split("|")[0].strip() for line in _running_list_lines(previous_text, label)
-    ]
-    missing = [name for name in previous_names if name and name_key(name) not in surviving_keys]
-    if missing:
-        raise ValueError(f"{label} dropped earlier {item_kind}(s): {', '.join(missing)}")
-    return "\n".join(f"{first} | {second} | {third}" for first, second, third in parsed)
-
-
-def validate_who_is_who(text: str, previous_who_is_who: str = "") -> str:
-    return validate_running_list(
-        text,
-        previous_who_is_who,
-        label="WHO IS WHO",
-        item_kind="character",
-    )
-
-
-def validate_where_is_where(text: str, previous_where_is_where: str = "") -> str:
-    return validate_running_list(
-        text,
-        previous_where_is_where,
-        label="WHERE IS WHERE",
-        item_kind="place",
-    )
 
 
 def summarize_chapter(

@@ -289,6 +289,17 @@ def main(argv: list[str] | None = None) -> int:
                     "Build summarize_chapter graph: model="
                     + settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL
                 )
+                # Card updates need JSON, so they use the extract client (as in pipeline.py).
+                extract_client = OpenRouterClient(
+                    settings,
+                    client=transport,
+                    model=settings.OPENROUTER_EXTRACT_CHARACTER_MODEL,
+                    max_tokens_setting="OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS",
+                    provider=settings.OPENROUTER_EXTRACT_CHARACTER_PROVIDER,
+                    allow_fallbacks=settings.OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS,
+                    reasoning=settings.OPENROUTER_EXTRACT_CHARACTER_REASONING,
+                    structured_outputs=settings.OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS,
+                )
                 summary_graph = build_summarize_chapter_graph(
                     OpenRouterClient(
                         settings,
@@ -297,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
                         max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
                         reasoning=settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
                     ),
+                    extract_client,
                     recorder.step,
                 )
                 summaries = summary_graph.invoke(
@@ -313,19 +325,7 @@ def main(argv: list[str] | None = None) -> int:
                     "Build extract_character graph: model="
                     + settings.OPENROUTER_EXTRACT_CHARACTER_MODEL
                 )
-                character_graph = build_extract_character_graph(
-                    OpenRouterClient(
-                        settings,
-                        client=transport,
-                        model=settings.OPENROUTER_EXTRACT_CHARACTER_MODEL,
-                        max_tokens_setting="OPENROUTER_EXTRACT_CHARACTER_MAX_TOKENS",
-                        provider=settings.OPENROUTER_EXTRACT_CHARACTER_PROVIDER,
-                        allow_fallbacks=settings.OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS,
-                        reasoning=settings.OPENROUTER_EXTRACT_CHARACTER_REASONING,
-                        structured_outputs=settings.OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS,
-                    ),
-                    recorder.step,
-                )
+                character_graph = build_extract_character_graph(extract_client, recorder.step)
                 character_graph.invoke(
                     {
                         "book_id": book_id,

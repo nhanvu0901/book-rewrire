@@ -1,7 +1,7 @@
 ---
 id: T-0018
 title: Refactor ingestion into cohesive LangGraph modules (behavior unchanged)
-status: in_progress
+status: done
 owner: Claude Sonnet (subagent, at the user's request)
 branch: ticket/T-0018-langgraph-refactor
 priority: high
@@ -187,7 +187,118 @@ None. If something in the design does not work, record the deviation and the evi
 
 ## Completion report
 
-_Filled by the implementer._
+Implemented by Claude Sonnet (subagent). Commits on `ticket/T-0018-langgraph-refactor`:
+`01066da` take ticket, `09e679b` neo4j package and shared helpers, `3ded125` steps, runtime context,
+chapter subgraph, pipeline, tests and audit runner, `59fda6a` new structure tests, `47f1e7a` README.
+The `T-0018: done` commit follows this report.
+
+### Changes by module
+
+- `ingest/text.py` (new): `name_key` (moved from `summarize_chapter.logic`), `normalized`,
+  `appears_in_source`, `unique_names`, `combine_descriptions` (moved from `identity.py`).
+- `ingest/storage.py` (new): atomic `save_json` (was `extract_character/logic.py`) and `save_model`
+  (was `summarize_chapter.logic.save_summary`; same bytes).
+- `ingest/graph/base.py` (new): `StrictModel`, `Text`.
+- `infrastructure/neo4j/` (replaces `neo4j_store.py`): `connection.py`, `cypher.py` (`KEYS`, one
+  statements tuple per entity, `CHAPTER_STATEMENTS` = the concatenation in the old order, `SNAPSHOT_LISTS`),
+  `writer.py`, `__init__.py` re-exports.
+- `ingest/graph/extract_story/` (replaces `extract_character/`):
+  - `graph.py` wiring only: `build_chapter_graph` (subgraph built from `STEPS`),
+    `build_extract_story_graph` (`initialize -> chapter -> route`), `extract_story_recursion_limit`.
+  - `state.py` (`StoryState`, `StoryInput`, two small accessors), `context.py` (`StoryContext`,
+    `StoryRuntime`), `nodes.py` (`initialize`, route), `output.py` (`save_json`, `save_graph`),
+    `snapshot.py` (Neo4j rows, incl. `character_rows`).
+  - `steps/{characters,relationships,locations,scenes,events,knowledge}/` with `model.py`, `prompt.py`
+    (git-moved, byte-identical), `logic.py`, `nodes.py` (extract and validate nodes plus the step's
+    `*_files(state)`), and `identity.py` for characters. `steps/checks.py` (`ChapterChecks`),
+    `steps/registry.py` (`Step`, `STEPS`).
+  - The `resolve_*` helpers moved from `snapshot.py` to the step that owns the record
+    (`scenes/logic.py`, `events/logic.py`, `knowledge/logic.py`); `resolve_ids` (new, in
+    `characters/identity.py`) replaces three copies of the same redirect-and-dedupe expression.
+- `ingest/graph/summarize_chapter/`: `graph.py` wiring only, `nodes.py`, `context.py` (`SummaryContext`),
+  `state.py` (state, input schema, `upsert_cards` reducer), `__init__.py` (public contract:
+  `ChapterSummary`, `format_previous_context`); `logic.py` and `model.py` lost the moved pieces.
+- `ingest/pipeline.py`, `cli.py`, audit runner: build contexts and call `invoke(..., context=...)`;
+  graph/run name, "Build extract_story graph" message and the `on_step("extract_story")` marker renamed.
+  The audit runner's phase label is now `extract_story`; its manifest keys stay `extract_character`
+  because they mirror the `OPENROUTER_EXTRACT_CHARACTER_*` settings, not the graph.
+- Tests: imports, graph build and invoke (context), renamed helper and message; new
+  `tests/test_ingest_graph_structure.py` (16 tests). README "How it works today" and "Repository layout".
+
+### Acceptance criteria and evidence
+
+Scratch files are in `/private/tmp/claude-501/-Users-nhanvu-Documents-code-book-clone/ebefb236-2596-49f1-8100-c977c55d7378/scratchpad/t0018/`
+(`dump_constants.py`, `golden_run.py`, `golden_merge.py`, `compare.py`, `baseline_*.json`, `after_*.json`).
+
+- Prompts and Cypher byte-identical: `dump_constants.py` dumped 14 prompt constants (`PROMPT_*`, `*_INPUT`),
+  45 `CHAPTER_STATEMENTS` and 8 `KEYS` before and after; `cmp baseline_constants.json after_constants.json`
+  printed no difference ("CONSTANTS IDENTICAL").
+- Golden run: `golden_run.py` (STORY from `tests/test_knowledge.py`, 2 chapters, `ingest_book`, fake LLM)
+  compared with `compare.py baseline_golden.json after_golden.json`:
+  ```text
+  files: IDENTICAL (36 entries)          llm_calls: IDENTICAL (12 entries)
+  result: IDENTICAL (3 entries)          snapshots: IDENTICAL (2 entries)
+  steps: IDENTICAL (46 entries)          summary_calls: IDENTICAL (3 entries)
+  writer_events: IDENTICAL (4 entries)   RESULT: all identical
+  ```
+  `llm_calls` holds every rendered prompt. The only step messages that differ are the two intended
+  renames (`extract_character` -> `extract_story`, "Build extract_character graph" -> "Build extract_story
+  graph"); `compare.py` maps these before comparing. A second golden, `golden_merge.py`, covers a chapter-2 merge
+  that retires a character with open relationships (rewrite, duplicate collapse, end of a relationship):
+  files (36), snapshots, llm_calls and steps are identical (baseline run on a worktree of `01066da`).
+  No existing test covered that path through `ingest_book`, because the rewrite moved (see Deviations).
+- Step imports: `tests/test_ingest_graph_structure.py::test_steps_import_only_earlier_steps_and_shared_modules`
+  (AST, per step) plus a grep loop over `steps/<x>/` printed "no forbidden imports" for all six steps
+  (no later step, no `extract_story.graph`, no `steps.registry`, no `summarize_chapter.*` module). The test fails
+  when a later-step import is added (checked by hand with a temporary import).
+- `graph.py` only wiring: `test_graph_modules_only_wire` (only `build_*` and `*_recursion_limit` functions);
+  `test_node_functions_stay_short` (every function in the nodes modules and `output.py` is <= 25 lines; the
+  longest are 23). `extract_story/graph.py` is 51 lines.
+- Pytest: `env POV_OPENROUTER=0 POV_NEO4J=0 .venv/bin/python -m pytest tests AI-work/skills/run-ingest-api-audit/tests -q`
+  -> `397 passed, 5 skipped, 1 warning` (base 381 + 16 new).
+- `ruff check src tests AI-work/skills/run-ingest-api-audit` -> `All checks passed!`;
+  `ruff format --check ...` -> `113 files already formatted`; `mypy src/pov_retell` -> `Success: no issues found
+  in 82 source files`; `mypy src tests` -> `Found 18 errors in 3 files` (test_config 10, test_llm 6,
+  test_character_ingest 2: the same 18 as the base); `git diff --check` clean.
+- Neo4j: Docker started in about 10 s. `make neo4j-up` first failed on a stale exited container
+  (`RWLayer ... is unexpectedly nil`); `make neo4j-down` removed it (the named data volume is untouched) and
+  `make neo4j-up` then reached `Healthy`. `env POV_NEO4J=1 .venv/bin/python -m pytest tests/test_neo4j_integration.py -q -m neo4j`
+  -> `3 passed`. Then `make neo4j-down` and Docker quit.
+- Runtime context in a subgraph (design check before the build): `ctx_probe.py` (scratch) and
+  `test_context_reaches_nodes_of_a_subgraph_used_as_a_node` show the parent's `context=` reaches nodes of a
+  compiled subgraph used as a node, and that overwrite state keys work without reducers. The subgraph design
+  was used; the flat fallback was not needed. `test_story_context_reaches_every_node` and
+  `test_summary_context_reaches_every_node` check the LLM, writer and `on_step` reach every node of both graphs.
+
+### Deviations
+
+1. **`Step` and `STEPS` live in `steps/registry.py`, not `steps/__init__.py`.** `state.py` imports every
+   step's models, and every step's nodes import `state.py`. If `steps/__init__.py` imported the nodes, importing
+   `state.py` first would run `steps/__init__.py`, which imports a nodes module that imports the half-loaded
+   `state.py` (circular import). Keeping `steps/__init__.py` and the step `__init__.py` files empty and putting
+   the registry in its own module avoids it.
+2. **The relationship rewrite after a character merge moved from `validate_characters` to the start of
+   `extract_relationships`.** In the old graph `validate_characters` called the relationships module, which breaks
+   "a step never imports a later step". The same function now runs at the start of `extract_relationships`
+   with the same inputs (cumulative redirects, chapter order) and stores the rewritten list before the LLM call
+   and validation use it. Node names, `on_step` messages, saved files and results are unchanged (golden and
+   merge golden identical).
+3. **`extract_story/nodes.py` added** for `initialize` and the route function (the layout had no home for them).
+   `StoryRuntime`, `current_chapter` and `earlier_summaries` were also added as tiny helpers.
+4. **Node type in `Step`** is a `Protocol` with a keyword-only `runtime` (that is what LangGraph's typing
+   expects), so `StateGraph.add_node` type-checks under `mypy --strict`.
+5. `on_step("extract_character")` in `pipeline.py` and the audit runner phase label were renamed to
+   `extract_story` along with the graph (the ticket lists the "Build" message, run name and helper only).
+   The audit manifest keys `extract_character` are left, since they mirror the settings names.
+6. `save_summary` (summary file writer) moved to `storage.save_model`; output bytes are identical
+   (`model_dump_json(indent=2)` is kept).
+
+### Follow-ups noticed
+
+- `characters/identity.py::focus_is_ambiguous` is unused anywhere (source, tests); kept to stay a pure refactor.
+- Chapter nodes still pass 7 to 11 positional arguments to the logic functions; a per-step "inputs" object
+  would be a separate, behavior-neutral cleanup.
+- `AI-work/PROJECT_CONTEXT.md` is not updated (the product manager runs context maintenance).
 
 ## Review
 

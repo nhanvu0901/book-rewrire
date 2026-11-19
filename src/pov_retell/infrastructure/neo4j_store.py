@@ -47,6 +47,7 @@ KEYS = {
     "Claim": ("claim_id",),
     "Event": ("event_id",),
     "Utterance": ("utterance_id",),
+    "KnowledgeAcquisition": ("acquisition_id",),
 }
 
 CHARACTER_PROPERTIES = (
@@ -193,6 +194,39 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}), "
     "(c:Claim {book_id: $book_id, run_id: $run_id, claim_id: claim_id}) "
     "MERGE (u)-[:ASSERTS]->(c)",
+    # Knowledge acquisitions
+    "UNWIND $knowledge AS row "
+    "MERGE (k:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id, "
+    "acquisition_id: row.acquisition_id}) "
+    "SET k.channel = row.channel, k.stance = row.stance, k.chapter_id = row.chapter_id, "
+    "k.segment_id = row.segment_id, k.order = row.order, k.paragraph_ids = row.paragraph_ids",
+    "MATCH (k:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id}) "
+    "WHERE NOT k.acquisition_id IN [row IN $knowledge | row.acquisition_id] "
+    "DETACH DELETE k",
+    "MATCH (:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id})"
+    "-[e:ABOUT|VIA|IN_SCENE]->() DELETE e",
+    "MATCH (:Character {book_id: $book_id, run_id: $run_id})-[e:ACQUIRED|EXPERIENCED]->() DELETE e",
+    "UNWIND $knowledge AS row "
+    "MATCH (k:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id, "
+    "acquisition_id: row.acquisition_id}), "
+    "(c:Character {book_id: $book_id, run_id: $run_id, character_id: row.character_id}), "
+    "(claim:Claim {book_id: $book_id, run_id: $run_id, claim_id: row.claim_id}), "
+    "(s:Scene {book_id: $book_id, run_id: $run_id, segment_id: row.segment_id}) "
+    "MERGE (c)-[:ACQUIRED]->(k) MERGE (k)-[:ABOUT]->(claim) MERGE (k)-[:IN_SCENE]->(s)",
+    "UNWIND $knowledge AS row "
+    "MATCH (k:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id, "
+    "acquisition_id: row.acquisition_id}), "
+    "(e:Event {book_id: $book_id, run_id: $run_id, event_id: row.source_id}) "
+    "MERGE (k)-[:VIA]->(e)",
+    "UNWIND $knowledge AS row "
+    "MATCH (k:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id, "
+    "acquisition_id: row.acquisition_id}), "
+    "(u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.source_id}) "
+    "MERGE (k)-[:VIA]->(u)",
+    "UNWIND $knowledge AS row WITH row WHERE row.channel = 'witnessed' "
+    "MATCH (c:Character {book_id: $book_id, run_id: $run_id, character_id: row.character_id}), "
+    "(e:Event {book_id: $book_id, run_id: $run_id, event_id: row.source_id}) "
+    "MERGE (c)-[:EXPERIENCED]->(e)",
 )
 
 SNAPSHOT_LISTS = (
@@ -203,6 +237,7 @@ SNAPSHOT_LISTS = (
     "claims",
     "events",
     "utterances",
+    "knowledge",
 )
 
 

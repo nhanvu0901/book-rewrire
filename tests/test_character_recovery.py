@@ -21,6 +21,7 @@ NO_EVENTS: dict[str, list[object]] = {
     "utterances": [],
     "truth_changes": [],
 }
+NO_KNOWLEDGE: dict[str, list[object]] = {"claims": [], "acquisitions": []}
 
 
 def _default_scene(unit_id: str) -> dict[str, object]:
@@ -52,12 +53,14 @@ def test_unknown_character_id_retries_before_saving(tmp_path: Path) -> None:
                 {"locations": []},
                 _default_scene("u01"),
                 NO_EVENTS,
+                NO_KNOWLEDGE,
                 extraction(character("Mara", "char_999")),
                 extraction(character("Mara", "char_001")),
                 {"relationships": []},
                 {"locations": []},
                 _default_scene("u02"),
                 NO_EVENTS,
+                NO_KNOWLEDGE,
             ]
         ]
     )
@@ -69,8 +72,8 @@ def test_unknown_character_id_retries_before_saving(tmp_path: Path) -> None:
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert result.character_count == 1 and len(transport.requests) == 15
-    assert "unknown character ID" in transport.requests[10]["messages"][-1]["content"]
+    assert result.character_count == 1 and len(transport.requests) == 17
+    assert "unknown character ID" in transport.requests[11]["messages"][-1]["content"]
 
 
 def test_repeated_invalid_ids_preserve_last_completed_chapter(tmp_path: Path) -> None:
@@ -86,6 +89,7 @@ def test_repeated_invalid_ids_preserve_last_completed_chapter(tmp_path: Path) ->
                 {"locations": []},
                 _default_scene("u01"),
                 NO_EVENTS,
+                NO_KNOWLEDGE,
                 bad,
                 bad,
                 bad,
@@ -126,6 +130,7 @@ def test_response_with_relationships_key_is_rejected_and_triggers_repair_retry(
             json.dumps({"locations": []}),
             json.dumps(_default_scene("u01")),
             json.dumps(NO_EVENTS),
+            json.dumps(NO_KNOWLEDGE),
         ]
     )
     result = ingest_book(
@@ -136,7 +141,7 @@ def test_response_with_relationships_key_is_rejected_and_triggers_repair_retry(
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert result.character_count == 1 and len(transport.requests) == 8
+    assert result.character_count == 1 and len(transport.requests) == 9
     retry_message = transport.requests[3]["messages"][-1]["content"]
     assert "Rejected:" in retry_message and "relationships" in retry_message
 

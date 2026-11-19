@@ -394,6 +394,7 @@ def test_ingest_extracts_full_profiles_once_per_chapter_and_preserves_absent_rec
         "claims.json",
         "events.json",
         "utterances.json",
+        "knowledge.json",
         "identity_redirects.json",
         "chapters",
         "summaries",

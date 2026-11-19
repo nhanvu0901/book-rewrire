@@ -7,6 +7,7 @@ from pov_retell.ingest.graph.extract_character.model import (
     ClaimRecord,
     EventRecord,
     ExtractCharacterState,
+    KnowledgeRecord,
     LocationRecord,
     RelationshipRecord,
     SceneSegmentRecord,
@@ -61,6 +62,12 @@ def resolve_claim(claim: ClaimRecord, redirects: dict[str, str]) -> ClaimRecord:
     if not redirects:
         return claim
     return claim.model_copy(update={"about_ids": _resolve(claim.about_ids, redirects)})
+
+
+def resolve_knowledge(record: KnowledgeRecord, redirects: dict[str, str]) -> KnowledgeRecord:
+    if record.character_id not in redirects:
+        return record
+    return record.model_copy(update={"character_id": redirects[record.character_id]})
 
 
 def location_rows(locations: list[LocationRecord]) -> list[dict[str, Any]]:
@@ -135,6 +142,13 @@ def utterance_rows(utterances: list[UtteranceRecord]) -> list[dict[str, Any]]:
     ]
 
 
+def knowledge_rows(knowledge: list[KnowledgeRecord]) -> list[dict[str, Any]]:
+    return [
+        {**k.model_dump(), "chapter_id": _chapter_of(k.acquisition_id), "order": order}
+        for order, k in enumerate(knowledge, start=1)
+    ]
+
+
 def chapter_snapshot(state: ExtractCharacterState) -> dict[str, Any]:
     """The cumulative graph of the run after the current chapter."""
     index = state["chapter_index"]
@@ -153,4 +167,5 @@ def chapter_snapshot(state: ExtractCharacterState) -> dict[str, Any]:
         "utterances": utterance_rows(
             [resolve_utterance(u, redirects) for u in state["utterances"]]
         ),
+        "knowledge": knowledge_rows([resolve_knowledge(k, redirects) for k in state["knowledge"]]),
     }

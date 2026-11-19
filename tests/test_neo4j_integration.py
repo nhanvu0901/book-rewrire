@@ -206,12 +206,42 @@ def test_events_utterances_and_claims_are_linked() -> None:
             "claim_ids": ["claim_001"],
         }
     ]
+    data["knowledge"] = [
+        {
+            "acquisition_id": f"u01_k{n}",
+            "chapter_id": "u01",
+            "order": n,
+            "character_id": who,
+            "claim_id": "claim_001",
+            "channel": channel,
+            "stance": "believes",
+            "segment_id": "u01_s1",
+            "source_id": source,
+            "paragraph_ids": ["u01_p001"],
+        }
+        for n, (who, channel, source) in enumerate(
+            [("char_001", "witnessed", "u01_e1"), ("char_002", "told", "u01_q1")], start=1
+        )
+    ]
     with connect(Settings()) as driver:  # type: ignore[call-arg]
         writer = Neo4jGraphWriter(driver)
         try:
             writer.start_run(book_id, "run_a", "The Gate", ["u01"])
             writer.write_chapter(book_id, "run_a", data)
             writer.write_chapter(book_id, "run_a", data)
+            records, _, _ = driver.execute_query(
+                "MATCH (c:Character {book_id: $book_id})-[:ACQUIRED]->(k:KnowledgeAcquisition)"
+                "-[:ABOUT]->(:Claim {claim_id: 'claim_001'}), (k)-[:IN_SCENE]->(:Scene), "
+                "(k)-[:VIA]->(source) "
+                "OPTIONAL MATCH (c)-[x:EXPERIENCED]->(:Event) "
+                "RETURN c.character_id AS who, k.channel AS channel, labels(source)[0] AS via, "
+                "count(x) AS experienced ORDER BY who",
+                book_id=book_id,
+            )
+            assert [dict(r) for r in records] == [
+                {"who": "char_001", "channel": "witnessed", "via": "Event", "experienced": 1},
+                {"who": "char_002", "channel": "told", "via": "Utterance", "experienced": 0},
+            ]
             records, _, _ = driver.execute_query(
                 "MATCH (m:Character {book_id: $book_id, character_id: 'char_001'})"
                 "-[:SAID]->(u:Utterance)-[:ASSERTS]->(c:Claim)-[:CONCERNS]->(j:Character), "

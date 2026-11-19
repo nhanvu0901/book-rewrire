@@ -161,11 +161,13 @@ def test_one_scene_map_call_per_chapter_after_location_step_and_saves_segments(
         "ExtractLocationResponse",
         "SceneMapResponse",
         "ExtractEventResponse",
+        "ExtractKnowledgeResponse",
         "ExtractCharacterResponse",
         "ExtractRelationshipResponse",
         "ExtractLocationResponse",
         "SceneMapResponse",
         "ExtractEventResponse",
+        "ExtractKnowledgeResponse",
     ]
     assert steps.index("validate_locations u01") < steps.index("extract_scenes u01")
     assert steps.index("validate_scenes u01") < steps.index(

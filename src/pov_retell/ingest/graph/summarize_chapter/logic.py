@@ -1,7 +1,4 @@
 from collections.abc import Sequence
-from pathlib import Path
-
-from pydantic import BaseModel
 
 from pov_retell.infrastructure.llm import JsonLLM, TextLLM
 from pov_retell.ingest.graph.summarize_chapter.model import (
@@ -19,6 +16,7 @@ from pov_retell.ingest.graph.summarize_chapter.prompt.summarize_chapter import (
     SUMMARY_INPUT,
 )
 from pov_retell.ingest.model import Chapter
+from pov_retell.ingest.text import name_key
 
 
 def format_chapter_summaries(summaries: Sequence[ChapterSummary]) -> str:
@@ -37,26 +35,6 @@ def format_previous_context(summaries: Sequence[ChapterSummary]) -> str:
         f"WHERE IS WHERE\n{last.where_is_where}\n\n"
         f"CHAPTER SUMMARIES\n{chapter_summaries}"
     )
-
-
-_QUOTE_TRANSLATION = str.maketrans(
-    {
-        "’": "'",
-        "‘": "'",
-        "‛": "'",
-        "ʼ": "'",
-        "′": "'",
-        "“": '"',
-        "”": '"',
-        "„": '"',
-        "″": '"',
-    }
-)
-
-
-def name_key(text: str) -> str:
-    """Comparison key for names (T-0012): case, quotes and spacing do not matter."""
-    return " ".join(text.translate(_QUOTE_TRANSLATION).split()).casefold()
 
 
 def render_cards(cards: dict[str, Card], *, with_ids: bool) -> str:
@@ -156,13 +134,3 @@ def summarize_book(
         where_is_where=where_is_where,
         core_memory=core_memory,
     )
-
-
-def save_summary(path: Path, summary: BaseModel) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    try:
-        temporary.write_text(summary.model_dump_json(indent=2) + "\n", encoding="utf-8")
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)

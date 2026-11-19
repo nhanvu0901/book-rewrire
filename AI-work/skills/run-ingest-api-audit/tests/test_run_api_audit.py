@@ -27,7 +27,7 @@ def load_module() -> Any:
 def test_truncated_response_is_saved_before_production_client_raises(tmp_path: Path) -> None:
     audit = load_module()
     recorder = audit.Recorder(tmp_path, secrets=["test-key"])
-    recorder.phase = "extract_character"
+    recorder.phase = "extract_story"
     recorder.step("extract_characters u02")
 
     def reply(request: httpx.Request) -> httpx.Response:
@@ -70,7 +70,7 @@ def test_truncated_response_is_saved_before_production_client_raises(tmp_path: P
     saved = json.loads((tmp_path / "http/http_0001.response.json").read_text())
     assert saved["response"]["id"] == "gen_failure"
     assert saved["response"]["usage"]["completion_tokens_details"]["reasoning_tokens"] == 60
-    assert saved["chapter_id"] == "u02" and saved["phase"] == "extract_character"
+    assert saved["chapter_id"] == "u02" and saved["phase"] == "extract_story"
     assert saved["response"]["choices"][0]["message"]["content"] == '{"characters":['
     all_text = "\n".join(p.read_text() for p in tmp_path.rglob("*") if p.is_file())
     assert "test-key" not in all_text and "Bearer" not in all_text

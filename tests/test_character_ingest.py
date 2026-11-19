@@ -634,7 +634,7 @@ def test_cli_selects_summary_and_full_profile_models_and_closes_driver(
         assert driver.rows[0]["gender"] == "female"
         assert any("status = 'complete'" in query for query in driver.queries)
         assert "Build summarize_chapter graph: model=example/summary" in result.output
-        assert "Build extract_character graph: model=example/characters" in result.output
+        assert "Build extract_story graph: model=example/characters" in result.output
         assert "attributes_model=" not in result.output
 
 
@@ -691,9 +691,7 @@ def test_later_profile_details_preserve_complementary_earlier_descriptions(tmp_p
 
 
 def test_extract_character_prompt_rules_and_example_have_no_relationships() -> None:
-    from pov_retell.ingest.graph.extract_character.prompt.extract_character import (
-        PROMPT_EXTRACT_CHAR,
-    )
+    from pov_retell.ingest.graph.extract_story.steps.characters.prompt import PROMPT_EXTRACT_CHAR
 
     assert "relationship" not in PROMPT_EXTRACT_CHAR.casefold()
     assert "lasting appearance only" in PROMPT_EXTRACT_CHAR
@@ -738,9 +736,7 @@ def test_extract_character_prompt_rules_and_example_have_no_relationships() -> N
 def test_extract_character_prompt_is_book_agnostic(forbidden_word: str) -> None:
     import re
 
-    from pov_retell.ingest.graph.extract_character.prompt.extract_character import (
-        PROMPT_EXTRACT_CHAR,
-    )
+    from pov_retell.ingest.graph.extract_story.steps.characters.prompt import PROMPT_EXTRACT_CHAR
 
     assert (
         re.search(rf"\b{re.escape(forbidden_word)}\b", PROMPT_EXTRACT_CHAR, re.IGNORECASE) is None

@@ -16,12 +16,14 @@ from test_character_ingest import (
 from test_llm import make
 
 from pov_retell.infrastructure.llm import strict_json_schema
-from pov_retell.ingest.graph.extract_character.graph import (
+from pov_retell.ingest.graph.extract_story.graph import (
     EXTRACT_NODES_PER_CHAPTER,
-    extract_character_recursion_limit,
+    extract_story_recursion_limit,
 )
-from pov_retell.ingest.graph.extract_character.model import ExtractRelationshipResponse
-from pov_retell.ingest.graph.extract_character.prompt.extract_relationship import (
+from pov_retell.ingest.graph.extract_story.steps.relationships.model import (
+    ExtractRelationshipResponse,
+)
+from pov_retell.ingest.graph.extract_story.steps.relationships.prompt import (
     PROMPT_EXTRACT_RELATIONSHIP,
 )
 from pov_retell.ingest.graph.summarize_chapter.graph import (
@@ -404,9 +406,7 @@ def test_recursion_limit_helpers_count_nodes_per_chapter() -> None:
     assert summarize_chapter_recursion_limit(17) == max(
         25, 17 * (SUMMARY_NODES_PER_CHAPTER + 1) + 10
     )
-    assert extract_character_recursion_limit(17) == max(
-        25, 17 * (EXTRACT_NODES_PER_CHAPTER + 1) + 10
-    )
+    assert extract_story_recursion_limit(17) == max(25, 17 * (EXTRACT_NODES_PER_CHAPTER + 1) + 10)
 
 
 @pytest.mark.parametrize(

@@ -17,8 +17,8 @@ from pov_retell.infrastructure.llm import (
     TransientLLMError,
     strict_json_schema,
 )
-from pov_retell.ingest.graph.extract_character.model import ExtractCharacterResponse
-from pov_retell.ingest.graph.extract_character.prompt.extract_character import PROMPT_EXTRACT_CHAR
+from pov_retell.ingest.graph.extract_story.steps.characters.model import ExtractCharacterResponse
+from pov_retell.ingest.graph.extract_story.steps.characters.prompt import PROMPT_EXTRACT_CHAR
 
 GOOD = '{"items": [{"cand_id": "c1", "role": "front", "unit_kind": "front", "title": "T"}]}'
 GOOD_CHAR = '{"characters": [{"character_id": "new_1", "candidate_name": "Mara"}]}'

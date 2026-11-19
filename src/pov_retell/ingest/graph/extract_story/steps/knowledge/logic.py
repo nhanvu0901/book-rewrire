@@ -4,19 +4,17 @@ import json
 from collections.abc import Sequence
 
 from pov_retell.infrastructure.llm import JsonLLM
-from pov_retell.ingest.graph.extract_character.events import ChapterChecks, format_existing_claims
-from pov_retell.ingest.graph.extract_character.model import (
-    ChapterEvents,
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.checks import ChapterChecks
+from pov_retell.ingest.graph.extract_story.steps.events.logic import format_existing_claims
+from pov_retell.ingest.graph.extract_story.steps.events.model import ChapterEvents, ClaimRecord
+from pov_retell.ingest.graph.extract_story.steps.knowledge.model import (
     ChapterKnowledge,
-    CharacterRecord,
-    ClaimRecord,
     ExtractKnowledgeResponse,
     KnowledgeRecord,
-    SceneSegmentRecord,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_knowledge import (
-    PROMPT_EXTRACT_KNOWLEDGE,
-)
+from pov_retell.ingest.graph.extract_story.steps.knowledge.prompt import PROMPT_EXTRACT_KNOWLEDGE
+from pov_retell.ingest.graph.extract_story.steps.scenes.model import SceneSegmentRecord
 from pov_retell.ingest.model import Chapter
 
 SOURCE_CHANNELS = {"witnessed", "told", "overheard", "read"}
@@ -243,3 +241,9 @@ def validate_knowledge(
         [*claims, *new_claims],
         next_claim_number,
     )
+
+
+def resolve_knowledge(record: KnowledgeRecord, redirects: dict[str, str]) -> KnowledgeRecord:
+    if record.character_id not in redirects:
+        return record
+    return record.model_copy(update={"character_id": redirects[record.character_id]})

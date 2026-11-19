@@ -15,17 +15,13 @@ from test_character_ingest import (
 from test_llm import make
 from test_location_ingest import loc_item, loc_response
 
-from pov_retell.ingest.graph.extract_character.model import (
-    CharacterRecord,
-    LocationRecord,
-)
-from pov_retell.ingest.graph.extract_character.prompt.extract_scene_map import (
-    PROMPT_EXTRACT_SCENE_MAP,
-)
-from pov_retell.ingest.graph.extract_character.scene_map import (
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.locations.model import LocationRecord
+from pov_retell.ingest.graph.extract_story.steps.scenes.logic import (
     extract_scene_map,
     validate_scene_map,
 )
+from pov_retell.ingest.graph.extract_story.steps.scenes.prompt import PROMPT_EXTRACT_SCENE_MAP
 from pov_retell.ingest.model import Chapter
 from pov_retell.ingest.pipeline import ingest_book
 

@@ -6,7 +6,7 @@ from test_character_ingest import RecordingWriter, make_extraction
 
 from pov_retell.config import Settings
 from pov_retell.infrastructure.llm import OpenRouterClient
-from pov_retell.ingest.graph.extract_character.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
 from pov_retell.ingest.pipeline import ingest_book
 
 

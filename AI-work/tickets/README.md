@@ -77,7 +77,7 @@ every review is committed.
 | [T-0015](T-0015-neo4j-graph-per-chapter.md) | Write the story graph to Neo4j after each chapter | done | Claude (at the user's request) | 2026-11-16 |
 | [T-0016](T-0016-events-claims.md) | Extract events, utterances and claims per chapter | done | Claude (at the user's request) | 2026-11-16 |
 | [T-0017](T-0017-knowledge-timeline.md) | Knowledge timeline: who learns which claim, how and when | done | Claude (at the user's request) | 2026-11-16 |
-| [T-0018](T-0018-langgraph-refactor.md) | Refactor ingestion into cohesive LangGraph modules (behavior unchanged) | ready | unassigned | 2026-11-19 |
+| [T-0018](T-0018-langgraph-refactor.md) | Refactor ingestion into cohesive LangGraph modules (behavior unchanged) | in_progress | Claude Sonnet (subagent, at the user's request) | 2026-11-19 |
 
 ## Recommended order
 

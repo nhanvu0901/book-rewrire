@@ -1,8 +1,8 @@
 ---
 id: T-0018
 title: Refactor ingestion into cohesive LangGraph modules (behavior unchanged)
-status: ready
-owner: unassigned
+status: in_progress
+owner: Claude Sonnet (subagent, at the user's request)
 branch: ticket/T-0018-langgraph-refactor
 priority: high
 created: 2026-11-19

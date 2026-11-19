@@ -15,6 +15,13 @@ from test_llm import make
 from pov_retell.infrastructure.llm import LLMError
 from pov_retell.ingest.pipeline import ingest_book
 
+NO_EVENTS: dict[str, list[object]] = {
+    "claims": [],
+    "events": [],
+    "utterances": [],
+    "truth_changes": [],
+}
+
 
 def _default_scene(unit_id: str) -> dict[str, object]:
     return {
@@ -44,11 +51,13 @@ def test_unknown_character_id_retries_before_saving(tmp_path: Path) -> None:
                 {"relationships": []},
                 {"locations": []},
                 _default_scene("u01"),
+                NO_EVENTS,
                 extraction(character("Mara", "char_999")),
                 extraction(character("Mara", "char_001")),
                 {"relationships": []},
                 {"locations": []},
                 _default_scene("u02"),
+                NO_EVENTS,
             ]
         ]
     )
@@ -60,8 +69,8 @@ def test_unknown_character_id_retries_before_saving(tmp_path: Path) -> None:
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert result.character_count == 1 and len(transport.requests) == 13
-    assert "unknown character ID" in transport.requests[9]["messages"][-1]["content"]
+    assert result.character_count == 1 and len(transport.requests) == 15
+    assert "unknown character ID" in transport.requests[10]["messages"][-1]["content"]
 
 
 def test_repeated_invalid_ids_preserve_last_completed_chapter(tmp_path: Path) -> None:
@@ -76,6 +85,7 @@ def test_repeated_invalid_ids_preserve_last_completed_chapter(tmp_path: Path) ->
                 {"relationships": []},
                 {"locations": []},
                 _default_scene("u01"),
+                NO_EVENTS,
                 bad,
                 bad,
                 bad,
@@ -115,6 +125,7 @@ def test_response_with_relationships_key_is_rejected_and_triggers_repair_retry(
             json.dumps({"relationships": []}),
             json.dumps({"locations": []}),
             json.dumps(_default_scene("u01")),
+            json.dumps(NO_EVENTS),
         ]
     )
     result = ingest_book(
@@ -125,7 +136,7 @@ def test_response_with_relationships_key_is_rejected_and_triggers_repair_retry(
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert result.character_count == 1 and len(transport.requests) == 7
+    assert result.character_count == 1 and len(transport.requests) == 8
     retry_message = transport.requests[3]["messages"][-1]["content"]
     assert "Rejected:" in retry_message and "relationships" in retry_message
 

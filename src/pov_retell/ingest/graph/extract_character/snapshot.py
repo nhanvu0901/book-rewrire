@@ -4,10 +4,13 @@ from typing import Any
 
 from pov_retell.ingest.graph.extract_character import logic
 from pov_retell.ingest.graph.extract_character.model import (
+    ClaimRecord,
+    EventRecord,
     ExtractCharacterState,
     LocationRecord,
     RelationshipRecord,
     SceneSegmentRecord,
+    UtteranceRecord,
 )
 
 
@@ -30,6 +33,34 @@ def resolve_scene(scene: SceneSegmentRecord, redirects: dict[str, str]) -> Scene
             "viewpoint_ids": _resolve(scene.viewpoint_ids, redirects),
         }
     )
+
+
+def resolve_event(event: EventRecord, redirects: dict[str, str]) -> EventRecord:
+    if not redirects:
+        return event
+    return event.model_copy(update={"participant_ids": _resolve(event.participant_ids, redirects)})
+
+
+def resolve_utterance(utterance: UtteranceRecord, redirects: dict[str, str]) -> UtteranceRecord:
+    if not redirects:
+        return utterance
+    speaker = (
+        redirects.get(utterance.speaker_id, utterance.speaker_id) if utterance.speaker_id else None
+    )
+    return utterance.model_copy(
+        update={
+            "speaker_id": speaker,
+            "addressee_ids": [
+                cid for cid in _resolve(utterance.addressee_ids, redirects) if cid != speaker
+            ],
+        }
+    )
+
+
+def resolve_claim(claim: ClaimRecord, redirects: dict[str, str]) -> ClaimRecord:
+    if not redirects:
+        return claim
+    return claim.model_copy(update={"about_ids": _resolve(claim.about_ids, redirects)})
 
 
 def location_rows(locations: list[LocationRecord]) -> list[dict[str, Any]]:
@@ -65,7 +96,7 @@ def scene_rows(scenes: list[SceneSegmentRecord]) -> list[dict[str, Any]]:
     return [
         {
             "segment_id": s.segment_id,
-            "chapter_id": s.segment_id.rsplit("_s", 1)[0],
+            "chapter_id": _chapter_of(s.segment_id),
             "order": order,
             "start": s.start,
             "end": s.end,
@@ -82,6 +113,28 @@ def scene_rows(scenes: list[SceneSegmentRecord]) -> list[dict[str, Any]]:
     ]
 
 
+def _chapter_of(record_id: str) -> str:
+    return record_id.split("_", 1)[0]
+
+
+def claim_rows(claims: list[ClaimRecord]) -> list[dict[str, Any]]:
+    return [c.model_dump() for c in claims]
+
+
+def event_rows(events: list[EventRecord]) -> list[dict[str, Any]]:
+    return [
+        {**e.model_dump(), "chapter_id": _chapter_of(e.event_id), "order": order}
+        for order, e in enumerate(events, start=1)
+    ]
+
+
+def utterance_rows(utterances: list[UtteranceRecord]) -> list[dict[str, Any]]:
+    return [
+        {**u.model_dump(), "chapter_id": _chapter_of(u.utterance_id), "order": order}
+        for order, u in enumerate(utterances, start=1)
+    ]
+
+
 def chapter_snapshot(state: ExtractCharacterState) -> dict[str, Any]:
     """The cumulative graph of the run after the current chapter."""
     index = state["chapter_index"]
@@ -95,4 +148,9 @@ def chapter_snapshot(state: ExtractCharacterState) -> dict[str, Any]:
         "locations": location_rows(state["locations"]),
         "relationships": relationship_rows(state["relationships"]),
         "scenes": scene_rows(scenes),
+        "claims": claim_rows([resolve_claim(c, redirects) for c in state["claims"]]),
+        "events": event_rows([resolve_event(e, redirects) for e in state["events"]]),
+        "utterances": utterance_rows(
+            [resolve_utterance(u, redirects) for u in state["utterances"]]
+        ),
     }

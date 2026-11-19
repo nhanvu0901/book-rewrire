@@ -314,6 +314,7 @@ def test_relationship_validation_rejects_and_retries_with_reason(
                     ]
                 }
             ),
+            json.dumps({"claims": [], "events": [], "utterances": [], "truth_changes": []}),
         ]
     )
     ingest_book(
@@ -324,7 +325,7 @@ def test_relationship_validation_rejects_and_retries_with_reason(
         extracted_dir=tmp_path / "extracted",
         ingest_dir=tmp_path / "ingest",
     )
-    assert len(transport.requests) == 7
+    assert len(transport.requests) == 8
     retry_msg = transport.requests[4]["messages"][-1]["content"]
     assert "Rejected:" in retry_msg and expected_reason in retry_msg
 

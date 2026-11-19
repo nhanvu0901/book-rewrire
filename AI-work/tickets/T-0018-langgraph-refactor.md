@@ -1,7 +1,7 @@
 ---
 id: T-0018
 title: Refactor ingestion into cohesive LangGraph modules (behavior unchanged)
-status: done
+status: verified
 owner: Claude Sonnet (subagent, at the user's request)
 branch: ticket/T-0018-langgraph-refactor
 priority: high
@@ -302,4 +302,55 @@ Scratch files are in `/private/tmp/claude-501/-Users-nhanvu-Documents-code-book-
 
 ## Review
 
-_Filled by the product manager._
+Reviewed by Claude (product manager) on 2026-11-19. Verdict: **verified**.
+
+### Verification rerun by the reviewer (branch at `57fba21`)
+
+| Check | Result |
+| --- | --- |
+| `env POV_OPENROUTER=0 POV_NEO4J=0 .venv/bin/python -m pytest tests AI-work/skills/run-ingest-api-audit/tests -q` | `397 passed, 5 skipped` (base 381 + 16 new) |
+| `ruff check` / `ruff format --check` | passed / 113 files already formatted |
+| `mypy src/pov_retell` / `mypy src tests` | no issues in 82 files / the same 18 pre-existing test errors |
+| `git diff --check 89fea0e HEAD` | clean |
+| Constants script (14 prompt constants, 45 statements, 8 keys) | `cmp` byte-identical with the pre-refactor baseline |
+| Golden run (`STORY`, 2 chapters) | files 36, LLM prompts 12, summary prompts 3, snapshots 2, writer events 4, steps 46: all identical (after mapping the two intended rename messages) |
+| Merge golden | Reviewer rebuilt the baseline from a fresh worktree of `01066da` (pre-refactor): all identical |
+| Neo4j opt-in | Not rerun by the reviewer (Docker off); implementer reports `3 passed` |
+
+### Acceptance criteria
+
+| Criterion | Result |
+| --- | --- |
+| Prompts and `CHAPTER_STATEMENTS` byte-identical | pass (rerun above) |
+| Golden run identical | pass (rerun above, two scenarios) |
+| Dependency direction | pass: `test_steps_import_only_earlier_steps_and_shared_modules`, `test_shared_step_helpers_do_not_import_the_knowledge_step_or_graph`; reviewer grep found no later-step import and no `langgraph` or file I/O in `steps/*/logic.py`, `steps/*/model.py`, `summarize_chapter/logic.py` |
+| `graph.py` only wiring, short nodes | pass: `test_graph_modules_only_wire`, `test_node_functions_stay_short`; reviewer read both `graph.py` files |
+| Suite, lint, format, types | pass |
+| Neo4j opt-in | pass per implementer; not independently rerun |
+
+### Design check
+
+- `extract_story/graph.py` builds the chapter subgraph from `STEPS` and a parent loop
+  `initialize → chapter → (next_chapter | done)`. Runtime context reaches subgraph nodes
+  (`test_context_reaches_nodes_of_a_subgraph_used_as_a_node`). No list reducers; overwrite semantics.
+- Each step package holds model, prompt, pure logic and thin nodes; `save_json` collects
+  `Step.files`; Neo4j is split into `connection`, `cypher`, `writer`.
+- Deviations 1–6 in the Completion report are accepted. Deviation 2 (relationship rewrite
+  moved to the start of `extract_relationships`) keeps the dependency direction and was
+  covered by the reviewer's merge golden. Deviation 5 (the `extract_story` step and audit
+  phase labels) follows the rename decision.
+
+### Findings (no change requested)
+
+- **N1:** the comment on `EXTRACT_NODES_PER_CHAPTER` says "plus initialize", but the value
+  (`len(STEPS) * 2 + 2`) does not count it. `extract_story_recursion_limit` is still sized for
+  the old flat graph; with the subgraph the parent needs about `N + 3` supersteps. It is safe
+  but loose.
+- **N2:** `initialize` still raises "Character extraction requires chapters" (old wording,
+  kept to preserve behavior).
+- **Follow-ups (separate tickets if wanted):** remove unused
+  `characters/identity.py::focus_is_ambiguous`; replace the long positional argument lists
+  of the logic functions with one input object per step.
+
+A passing suite and identical golden output prove the refactor preserved behavior on the
+covered paths; they say nothing about story-fact quality, which is still unmeasured live.

@@ -18,7 +18,7 @@ from pov_retell.book.output import load_extraction, save_extraction
 from pov_retell.book.pipeline import extract_book
 from pov_retell.config import Settings
 from pov_retell.infrastructure.llm import LLMError, OpenRouterClient
-from pov_retell.infrastructure.neo4j_store import (
+from pov_retell.infrastructure.neo4j import (
     Neo4jGraphWriter,
     Neo4jUnavailable,
     check_health,

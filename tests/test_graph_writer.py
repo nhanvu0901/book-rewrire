@@ -18,7 +18,8 @@ from test_character_ingest import (
 )
 
 from pov_retell.infrastructure.llm import LLMError
-from pov_retell.infrastructure.neo4j_store import CHAPTER_STATEMENTS, KEYS, Neo4jGraphWriter
+from pov_retell.infrastructure.neo4j import Neo4jGraphWriter
+from pov_retell.infrastructure.neo4j.cypher import CHAPTER_STATEMENTS, KEYS
 from pov_retell.ingest.pipeline import ingest_book
 
 

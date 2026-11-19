@@ -1,43 +1,8 @@
-from typing import Any
+"""Cypher for the per-chapter story-graph snapshot, grouped by entity.
 
-from neo4j import Driver, GraphDatabase, ManagedTransaction, NotificationMinimumSeverity
-from neo4j.exceptions import Neo4jError, ServiceUnavailable
-
-from pov_retell.config import Settings
-
-
-class Neo4jUnavailable(RuntimeError):
-    """Neo4j cannot be reached or refused the credentials. The message says what to do."""
-
-
-def connect(settings: Settings) -> Driver:
-    """Open a driver from the settings. The password is read here and never printed."""
-    password = settings.NEO4J_PASSWORD.get_secret_value()
-    if not password:
-        raise Neo4jUnavailable(
-            "NEO4J_PASSWORD is not set: put it in .env, then run `make neo4j-up`"
-        )
-    return GraphDatabase.driver(
-        settings.neo4j_uri,
-        auth=(settings.NEO4J_USER, password),
-        notifications_min_severity=NotificationMinimumSeverity.OFF,
-    )
-
-
-def check_health(driver: Driver) -> dict[str, str]:
-    """Return the server version and edition, or raise Neo4jUnavailable."""
-    try:
-        driver.verify_connectivity()
-        record, _, _ = driver.execute_query(
-            "CALL dbms.components() YIELD name, versions, edition "
-            "RETURN name, versions[0] AS version, edition"
-        )
-    except (ServiceUnavailable, OSError) as exc:
-        raise Neo4jUnavailable("cannot reach Neo4j: is it up? run `make neo4j-up`") from exc
-    except Neo4jError as exc:
-        raise Neo4jUnavailable(f"Neo4j refused the request: {exc.message}") from exc
-    return dict(record[0])
-
+Each chapter snapshot replaces the run's graph: nodes are upserted, nodes that left the
+snapshot are removed, and every edge of the run is rebuilt from the snapshot.
+"""
 
 KEYS = {
     "IngestRun": (),
@@ -61,13 +26,13 @@ CHARACTER_PROPERTIES = (
     "resolution_status",
 )
 
-# Each chapter snapshot replaces the run's graph: nodes are upserted, nodes that left the
-# snapshot are removed, and every edge of the run is rebuilt from the snapshot.
-CHAPTER_STATEMENTS: tuple[str, ...] = (
+RUN_STATEMENTS: tuple[str, ...] = (
     "MERGE (r:IngestRun {book_id: $book_id, run_id: $run_id}) "
     "SET r.status = 'running', r.chapters_done = $chapters_done, "
     "r.last_chapter_id = $chapter_id, r.updated_at = datetime()",
-    # Characters
+)
+
+CHARACTER_STATEMENTS: tuple[str, ...] = (
     "UNWIND $characters AS row "
     "MERGE (c:Character {book_id: $book_id, run_id: $run_id, character_id: row.character_id}) "
     + "SET "
@@ -76,7 +41,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (c:Character {book_id: $book_id, run_id: $run_id}) "
     "WHERE NOT c.character_id IN [row IN $characters | row.character_id] "
     "DETACH DELETE c",
-    # Locations
+)
+
+LOCATION_STATEMENTS: tuple[str, ...] = (
     "UNWIND $locations AS row "
     "MERGE (l:Location {book_id: $book_id, run_id: $run_id, location_id: row.location_id}) "
     "SET l.name = row.name, l.aliases = row.aliases, l.kind = row.kind",
@@ -88,7 +55,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (a:Location {book_id: $book_id, run_id: $run_id, location_id: row.location_id}), "
     "(b:Location {book_id: $book_id, run_id: $run_id, location_id: row.part_of}) "
     "MERGE (a)-[:PART_OF]->(b)",
-    # Relationships
+)
+
+RELATIONSHIP_STATEMENTS: tuple[str, ...] = (
     "MATCH (:Character {book_id: $book_id, run_id: $run_id})-[e:RELATES_TO]->() DELETE e",
     "UNWIND $relationships AS row "
     "MATCH (a:Character {book_id: $book_id, run_id: $run_id, character_id: row.source_id}), "
@@ -98,7 +67,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "valid_from_paragraph_ids: row.valid_from_paragraph_ids, "
     "valid_to_chapter_id: row.valid_to_chapter_id, "
     "valid_to_paragraph_ids: row.valid_to_paragraph_ids}]->(b)",
-    # Scenes
+)
+
+SCENE_STATEMENTS: tuple[str, ...] = (
     "UNWIND $scenes AS row "
     "MERGE (s:Scene {book_id: $book_id, run_id: $run_id, segment_id: row.segment_id}) "
     "SET s.chapter_id = row.chapter_id, s.order = row.order, s.start = row.start, "
@@ -126,7 +97,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (s:Scene {book_id: $book_id, run_id: $run_id, segment_id: row.segment_id}), "
     "(c:Character {book_id: $book_id, run_id: $run_id, character_id: cid}) "
     "MERGE (c)-[:MENTIONED_IN]->(s)",
-    # Claims
+)
+
+CLAIM_STATEMENTS: tuple[str, ...] = (
     "UNWIND $claims AS row "
     "MERGE (c:Claim {book_id: $book_id, run_id: $run_id, claim_id: row.claim_id}) "
     "SET c.statement = row.statement, c.truth = row.truth, "
@@ -140,7 +113,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (c:Claim {book_id: $book_id, run_id: $run_id, claim_id: row.claim_id}), "
     "(p:Character {book_id: $book_id, run_id: $run_id, character_id: cid}) "
     "MERGE (c)-[:CONCERNS]->(p)",
-    # Events
+)
+
+EVENT_STATEMENTS: tuple[str, ...] = (
     "UNWIND $events AS row "
     "MERGE (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}) "
     "SET e.chapter_id = row.chapter_id, e.segment_id = row.segment_id, e.order = row.order, "
@@ -167,7 +142,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (e:Event {book_id: $book_id, run_id: $run_id, event_id: row.event_id}), "
     "(c:Claim {book_id: $book_id, run_id: $run_id, claim_id: claim_id}) "
     "MERGE (e)-[:HAS_CLAIM]->(c)",
-    # Utterances
+)
+
+UTTERANCE_STATEMENTS: tuple[str, ...] = (
     "UNWIND $utterances AS row "
     "MERGE (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}) "
     "SET u.chapter_id = row.chapter_id, u.segment_id = row.segment_id, u.order = row.order, "
@@ -194,7 +171,9 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MATCH (u:Utterance {book_id: $book_id, run_id: $run_id, utterance_id: row.utterance_id}), "
     "(c:Claim {book_id: $book_id, run_id: $run_id, claim_id: claim_id}) "
     "MERGE (u)-[:ASSERTS]->(c)",
-    # Knowledge acquisitions
+)
+
+KNOWLEDGE_STATEMENTS: tuple[str, ...] = (
     "UNWIND $knowledge AS row "
     "MERGE (k:KnowledgeAcquisition {book_id: $book_id, run_id: $run_id, "
     "acquisition_id: row.acquisition_id}) "
@@ -229,6 +208,18 @@ CHAPTER_STATEMENTS: tuple[str, ...] = (
     "MERGE (c)-[:EXPERIENCED]->(e)",
 )
 
+CHAPTER_STATEMENTS: tuple[str, ...] = (
+    *RUN_STATEMENTS,
+    *CHARACTER_STATEMENTS,
+    *LOCATION_STATEMENTS,
+    *RELATIONSHIP_STATEMENTS,
+    *SCENE_STATEMENTS,
+    *CLAIM_STATEMENTS,
+    *EVENT_STATEMENTS,
+    *UTTERANCE_STATEMENTS,
+    *KNOWLEDGE_STATEMENTS,
+)
+
 SNAPSHOT_LISTS = (
     "characters",
     "locations",
@@ -239,69 +230,3 @@ SNAPSHOT_LISTS = (
     "utterances",
     "knowledge",
 )
-
-
-class Neo4jGraphWriter:
-    """Writes a run's story graph after every chapter. Nodes are keyed by book and run."""
-
-    def __init__(self, driver: Driver) -> None:
-        self.driver = driver
-        self._schema_ready = False
-
-    def ensure_schema(self) -> None:
-        if self._schema_ready:
-            return
-        for label, key in KEYS.items():
-            properties = ", ".join(f"n.{name}" for name in ("book_id", "run_id", *key))
-            self.driver.execute_query(
-                f"CREATE CONSTRAINT {label.lower()}_key IF NOT EXISTS FOR (n:{label}) "
-                f"REQUIRE ({properties}) IS UNIQUE"
-            )
-        self._schema_ready = True
-
-    def start_run(self, book_id: str, run_id: str, title: str, chapter_ids: list[str]) -> None:
-        self.ensure_schema()
-        self.driver.execute_query(
-            "MERGE (r:IngestRun {book_id: $book_id, run_id: $run_id}) "
-            "SET r.title = $title, r.chapter_count = $chapter_count, r.status = 'running', "
-            "r.chapters_done = 0, r.last_chapter_id = null, r.error = null, "
-            "r.started_at = datetime()",
-            book_id=book_id,
-            run_id=run_id,
-            title=title,
-            chapter_count=len(chapter_ids),
-        )
-
-    def write_chapter(self, book_id: str, run_id: str, snapshot: dict[str, Any]) -> None:
-        self.ensure_schema()
-        parameters = {
-            "book_id": book_id,
-            "run_id": run_id,
-            "chapter_id": snapshot["chapter_id"],
-            "chapters_done": snapshot["chapters_done"],
-            **{name: snapshot.get(name, []) for name in SNAPSHOT_LISTS},
-        }
-
-        def write(tx: ManagedTransaction) -> None:
-            for statement in CHAPTER_STATEMENTS:
-                tx.run(statement, parameters).consume()
-
-        with self.driver.session() as session:
-            session.execute_write(write)
-
-    def finish_run(self, book_id: str, run_id: str) -> None:
-        self.driver.execute_query(
-            "MATCH (r:IngestRun {book_id: $book_id, run_id: $run_id}) "
-            "SET r.status = 'complete', r.finished_at = datetime()",
-            book_id=book_id,
-            run_id=run_id,
-        )
-
-    def fail_run(self, book_id: str, run_id: str, error: str) -> None:
-        self.driver.execute_query(
-            "MERGE (r:IngestRun {book_id: $book_id, run_id: $run_id}) "
-            "SET r.status = 'failed', r.error = $error, r.finished_at = datetime()",
-            book_id=book_id,
-            run_id=run_id,
-            error=error,
-        )

@@ -113,7 +113,7 @@ different jobs:
 flowchart LR
     S["Book<br/>HTML · EPUB · TXT"] -->|pov extract| X["book.json<br/>units/*.txt"]
     X -->|pov ingest| SG["summarize_chapter<br/>graph"]
-    SG --> EG["extract_character<br/>graph"]
+    SG --> EG["extract_story<br/>graph"]
     EG --> J["JSON per run"]
     EG -->|after each chapter| N[("Neo4j<br/>story graph")]
     J -->|pov knowledge| V["A character's view<br/>at chapter / scene"]
@@ -155,17 +155,25 @@ initialize -> summarize_chapter -> update_who_is_who -> update_where_is_where
   rejects unknown or duplicate entries, and merges the changes.
 - `summarize_book` runs once after the last chapter and writes the book's `core_memory`.
 
-**Extraction graph** (6 calls per chapter):
+**Extraction graph** `extract_story` (6 calls per chapter). A parent graph loops over the chapters
+(`initialize -> chapter --(next chapter)--> chapter`); the `chapter` node is a compiled subgraph that
+runs one chapter:
 
 ```text
-initialize -> extract_characters -> validate_characters
+extract_characters -> validate_characters
            -> extract_relationships -> validate_relationships
            -> extract_locations -> validate_locations
            -> extract_scenes -> validate_scenes
            -> extract_events -> validate_events
            -> extract_knowledge -> validate_knowledge
-           -> save_json -> save_graph --(next chapter)--> extract_characters
+           -> save_json -> save_graph
 ```
+
+Each pair of nodes is one *step* in `extract_story/steps/`, listed in order in `STEPS`
+(characters, relationships, locations, scenes, events, knowledge). A step owns its models, prompt,
+validation, nodes and the files it saves, and imports only earlier steps. The LLM client, the graph
+writer and the progress callback are passed to the graphs as LangGraph runtime context, not captured
+in closures.
 
 Each call for chapter *N* receives the original chapter text plus context through chapter *N−1*
 only (the WHO IS WHO and WHERE IS WHERE lists and earlier chapter summaries). It never sees the
@@ -281,16 +289,20 @@ src/pov_retell/
 ├── config.py                  settings from .env
 ├── book/                      pov extract: load, candidates, LLM map, cut, paragraphs, output
 ├── ingest/
-│   ├── pipeline.py            runs the summary graph, then the extraction graph, then Neo4j
+│   ├── pipeline.py            builds the contexts, runs the summary graph, then the extraction graph
 │   ├── source.py, model.py    validated chapter input, run result, graph-writer protocol
+│   ├── text.py, storage.py    shared text helpers; atomic JSON writes
 │   ├── timeline.py            a character's knowledge at a chapter or scene (`pov knowledge`)
 │   └── graph/
-│       ├── summarize_chapter/ graph, models, logic and prompt/
-│       └── extract_character/ graph, models, identity, relationship, location, scene_map,
-│                              events, knowledge, snapshot and prompt/
+│       ├── base.py            shared Pydantic base (`StrictModel`, `Text`)
+│       ├── summarize_chapter/ graph (wiring), nodes, context, state, models, logic, prompt/
+│       └── extract_story/     graph (wiring), nodes, context, state, output, snapshot (Neo4j rows)
+│           └── steps/         one package per step: characters, relationships, locations,
+│                              scenes, events, knowledge (model, prompt, logic, nodes);
+│                              checks.py shared validation; registry.py `STEPS`
 └── infrastructure/
     ├── llm.py                 OpenRouter JSON and text clients with validation and retries
-    └── neo4j_store.py         connectivity and the per-chapter story-graph writer
+    └── neo4j/                 connection, cypher (statements per entity), per-chapter writer
 docker/compose.yml             Neo4j only (Compose project `book-clone-dev`)
 doc/presentation/              slide deck, assets and talk script
 AI-work/                       project context, tickets and agent roles
@@ -298,7 +310,7 @@ tests/                         offline tests on invented sample stories
 ```
 
 A good reading order: `book/models.py` → `book/pipeline.py` → `ingest/pipeline.py` → the two
-`graph.py` files → their `prompt/` folders.
+`graph.py` files → `extract_story/steps/registry.py` → one step package (for example `steps/locations/`).
 
 ## Development
 

@@ -20,24 +20,23 @@ from test_llm import make, settings
 from typer.testing import CliRunner
 
 from pov_retell import cli
-from pov_retell.ingest.graph.extract_character.knowledge import (
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.events.model import (
+    ChapterEvents,
+    ClaimRecord,
+    EventRecord,
+    UtteranceRecord,
+)
+from pov_retell.ingest.graph.extract_story.steps.knowledge.logic import (
     extract_knowledge,
     validate_knowledge,
 )
-from pov_retell.ingest.graph.extract_character.model import (
-    ChapterEvents,
-    CharacterRecord,
-    ClaimRecord,
-    EventRecord,
+from pov_retell.ingest.graph.extract_story.steps.knowledge.model import (
     ExtractKnowledgeResponse,
     KnowledgeRecord,
-    SceneSegmentRecord,
-    SceneTime,
-    UtteranceRecord,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_knowledge import (
-    PROMPT_EXTRACT_KNOWLEDGE,
-)
+from pov_retell.ingest.graph.extract_story.steps.knowledge.prompt import PROMPT_EXTRACT_KNOWLEDGE
+from pov_retell.ingest.graph.extract_story.steps.scenes.model import SceneSegmentRecord, SceneTime
 from pov_retell.ingest.model import Chapter
 from pov_retell.ingest.pipeline import ingest_book
 from pov_retell.ingest.timeline import format_knowledge, knowledge_at, latest_run

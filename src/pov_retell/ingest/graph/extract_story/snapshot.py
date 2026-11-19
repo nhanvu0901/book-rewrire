@@ -2,72 +2,41 @@
 
 from typing import Any
 
-from pov_retell.ingest.graph.extract_character import logic
-from pov_retell.ingest.graph.extract_character.model import (
+from pov_retell.ingest.graph.extract_story.state import StoryState
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.events.logic import (
+    resolve_claim,
+    resolve_event,
+    resolve_utterance,
+)
+from pov_retell.ingest.graph.extract_story.steps.events.model import (
     ClaimRecord,
     EventRecord,
-    ExtractCharacterState,
-    KnowledgeRecord,
-    LocationRecord,
-    RelationshipRecord,
-    SceneSegmentRecord,
     UtteranceRecord,
 )
+from pov_retell.ingest.graph.extract_story.steps.knowledge.logic import resolve_knowledge
+from pov_retell.ingest.graph.extract_story.steps.knowledge.model import KnowledgeRecord
+from pov_retell.ingest.graph.extract_story.steps.locations.model import LocationRecord
+from pov_retell.ingest.graph.extract_story.steps.relationships.model import RelationshipRecord
+from pov_retell.ingest.graph.extract_story.steps.scenes.logic import resolve_scene
+from pov_retell.ingest.graph.extract_story.steps.scenes.model import SceneSegmentRecord
 
 
-def _resolve(ids: list[str], redirects: dict[str, str]) -> list[str]:
-    return list(dict.fromkeys(redirects.get(cid, cid) for cid in ids))
-
-
-def resolve_scene(scene: SceneSegmentRecord, redirects: dict[str, str]) -> SceneSegmentRecord:
-    """Return the scene with retired character IDs replaced by their survivors."""
-    if not redirects:
-        return scene
-    present = _resolve(scene.present_ids, redirects)
-    present_set = set(present)
-    return scene.model_copy(
-        update={
-            "present_ids": present,
-            "mentioned_ids": [
-                cid for cid in _resolve(scene.mentioned_ids, redirects) if cid not in present_set
-            ],
-            "viewpoint_ids": _resolve(scene.viewpoint_ids, redirects),
+def character_rows(characters: list[CharacterRecord]) -> list[dict[str, Any]]:
+    return [
+        {
+            "character_id": c.character_id,
+            "canonical_name": c.candidate_name,
+            "aliases": c.aliases,
+            "gender": c.attributes.gender,
+            "species": c.attributes.species,
+            "age_description": c.attributes.age_description,
+            "physical_description": c.attributes.physical_description,
+            "personality": "; ".join(c.attributes.personality_traits) or None,
+            "resolution_status": c.resolution_status,
         }
-    )
-
-
-def resolve_event(event: EventRecord, redirects: dict[str, str]) -> EventRecord:
-    if not redirects:
-        return event
-    return event.model_copy(update={"participant_ids": _resolve(event.participant_ids, redirects)})
-
-
-def resolve_utterance(utterance: UtteranceRecord, redirects: dict[str, str]) -> UtteranceRecord:
-    if not redirects:
-        return utterance
-    speaker = (
-        redirects.get(utterance.speaker_id, utterance.speaker_id) if utterance.speaker_id else None
-    )
-    return utterance.model_copy(
-        update={
-            "speaker_id": speaker,
-            "addressee_ids": [
-                cid for cid in _resolve(utterance.addressee_ids, redirects) if cid != speaker
-            ],
-        }
-    )
-
-
-def resolve_claim(claim: ClaimRecord, redirects: dict[str, str]) -> ClaimRecord:
-    if not redirects:
-        return claim
-    return claim.model_copy(update={"about_ids": _resolve(claim.about_ids, redirects)})
-
-
-def resolve_knowledge(record: KnowledgeRecord, redirects: dict[str, str]) -> KnowledgeRecord:
-    if record.character_id not in redirects:
-        return record
-    return record.model_copy(update={"character_id": redirects[record.character_id]})
+        for c in characters
+    ]
 
 
 def location_rows(locations: list[LocationRecord]) -> list[dict[str, Any]]:
@@ -149,7 +118,7 @@ def knowledge_rows(knowledge: list[KnowledgeRecord]) -> list[dict[str, Any]]:
     ]
 
 
-def chapter_snapshot(state: ExtractCharacterState) -> dict[str, Any]:
+def chapter_snapshot(state: StoryState) -> dict[str, Any]:
     """The cumulative graph of the run after the current chapter."""
     index = state["chapter_index"]
     redirects = state["identity_redirects"]
@@ -157,7 +126,7 @@ def chapter_snapshot(state: ExtractCharacterState) -> dict[str, Any]:
     return {
         "chapter_id": state["chapters"][index].unit_id,
         "chapters_done": index + 1,
-        "characters": logic.character_rows(state["characters"]),
+        "characters": character_rows(state["characters"]),
         "retired_character_ids": sorted(redirects),
         "locations": location_rows(state["locations"]),
         "relationships": relationship_rows(state["relationships"]),

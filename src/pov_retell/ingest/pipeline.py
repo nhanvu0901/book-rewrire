@@ -4,11 +4,13 @@ from typing import Any, cast
 from uuid import uuid4
 
 from pov_retell.infrastructure.llm import JsonLLM, TextLLM
-from pov_retell.ingest.graph.extract_character.graph import (
-    build_extract_character_graph,
-    extract_character_recursion_limit,
+from pov_retell.ingest.graph.extract_story.context import StoryContext
+from pov_retell.ingest.graph.extract_story.graph import (
+    build_extract_story_graph,
+    extract_story_recursion_limit,
 )
-from pov_retell.ingest.graph.extract_character.model import ExtractCharacterState
+from pov_retell.ingest.graph.extract_story.state import StoryState
+from pov_retell.ingest.graph.summarize_chapter.context import SummaryContext
 from pov_retell.ingest.graph.summarize_chapter.graph import (
     build_summarize_chapter_graph,
     summarize_chapter_recursion_limit,
@@ -81,12 +83,11 @@ def _run_graphs(
     summary_llm: TextLLM,
     writer: GraphWriter | None,
     on_step: Callable[[str], None] | None,
-) -> ExtractCharacterState:
+) -> StoryState:
     metadata: dict[str, Any] = {"book_id": book_id, "run_id": run_id}
     if on_step is not None:
         on_step(f"Build summarize_chapter graph: model={getattr(summary_llm, 'model', 'unknown')}")
-    # WHO IS WHO / WHERE IS WHERE card updates need JSON, so they use the extract client.
-    summary_graph = build_summarize_chapter_graph(summary_llm, character_llm, on_step)
+    summary_graph = build_summarize_chapter_graph()
     summary_state = summary_graph.invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir},
         {
@@ -94,14 +95,13 @@ def _run_graphs(
             "run_name": "summarize_chapter",
             "metadata": metadata,
         },
+        context=SummaryContext(summary_llm, character_llm, on_step),
     )
     if on_step is not None:
-        on_step("extract_character")
-        on_step(
-            f"Build extract_character graph: model={getattr(character_llm, 'model', 'unknown')}"
-        )
-    character_graph = build_extract_character_graph(character_llm, on_step, writer)
-    final = character_graph.invoke(
+        on_step("extract_story")
+        on_step(f"Build extract_story graph: model={getattr(character_llm, 'model', 'unknown')}")
+    story_graph = build_extract_story_graph()
+    final = story_graph.invoke(
         {
             "book_id": book_id,
             "run_id": run_id,
@@ -111,9 +111,10 @@ def _run_graphs(
             "output_dir": output_dir,
         },
         {
-            "recursion_limit": extract_character_recursion_limit(len(chapters)),
-            "run_name": "extract_character",
+            "recursion_limit": extract_story_recursion_limit(len(chapters)),
+            "run_name": "extract_story",
             "metadata": metadata,
         },
+        context=StoryContext(character_llm, writer, on_step),
     )
-    return cast(ExtractCharacterState, final)
+    return cast(StoryState, final)

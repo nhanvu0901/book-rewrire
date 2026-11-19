@@ -1,6 +1,6 @@
 # Current Project Context
 
-Updated: 2026-11-16 from branch `ticket/T-0017-knowledge-timeline` (clean at HEAD `089db9b`).
+Updated: 2026-11-19 from branch `ticket/T-0018-langgraph-refactor` (clean at HEAD `ae0f2d7`, review commit).
 This is the concise onboarding reference, not a session transcript.
 Read [root AGENTS.md](../AGENTS.md) before acting. Verify mutable settings and source when needed.
 
@@ -14,10 +14,9 @@ character's POV. It is not a FastAPI/web app. The POV narrator/retelling is not 
 User responses are Vietnamese; code, comments, prompts, and AI instructions are English.
 Keep graph builders, models, logic, and prompts together by graph. Preserve previous book runs.
 
-Branch state: nothing below is merged into `main` yet. The branches are stacked in this order
-(each contains the one before): `ticket/T-0013-glm-card-updates` -> `ticket/T-0014-transient-retry`
--> `ticket/T-0015-neo4j-graph-per-chapter` -> `ticket/T-0016-events-claims` ->
-`ticket/T-0017-knowledge-timeline` (current). All five tickets are `done`, none reviewed by Claude yet.
+Branch state: T-0013 to T-0016 are merged into `main` (PRs #7 and #8). Open: PR #9 (`ticket/T-0017-knowledge-timeline`,
+`done`, not reviewed by Claude) and PR #10 (presentation). `ticket/T-0018-langgraph-refactor` (current, `verified`,
+review commit `ae0f2d7`) is stacked on top of the T-0017 branch and nothing of it is pushed. Merge order: #9, then T-0018.
 
 ## Current Workflow
 
@@ -28,7 +27,7 @@ pov extract <source> --id <book_id>
 pov ingest <book_id>            # --neo4j is the default
   -> validate saved chapter files -> fresh run directory
   -> (Neo4j) start_run
-  -> summarize_chapter graph -> extract_character graph (writes Neo4j after every chapter)
+  -> summarize_chapter graph -> extract_story graph (writes Neo4j after every chapter)
   -> (Neo4j) finish_run, or fail_run + re-raise on error
 pov ingest <book_id> --no-neo4j   # no connect/health check/write; JSON files only
 pov knowledge <book_id> <character> [--run R] [--until uNN|uNN_sM] [--json] [--reveal]
@@ -38,12 +37,21 @@ pov knowledge <book_id> <character> [--run R] [--until uNN|uNN_sM] [--json] [--r
 - Source validation compares chapter order, file set, paragraph IDs/order, and text with `book.json`.
 - Summary graph: `initialize -> summarize_chapter -> update_who_is_who -> update_where_is_where -> validate_summary -> save_summary -> summarize_book`,
   looping across chapters; `summarize_book` runs once after the last chapter.
-  `build_summarize_chapter_graph(llm, card_llm, on_step)`: the text client writes the chapter summary and
-  `summarize_book`; the card updates (WHO IS WHO, WHERE IS WHERE) use the extract (JSON) client (T-0013 Rev. 2).
-- Extraction graph (per chapter, looping):
-  `initialize -> extract_characters -> validate_characters -> extract_relationships -> validate_relationships -> extract_locations -> validate_locations -> extract_scenes -> validate_scenes -> extract_events -> validate_events -> extract_knowledge -> validate_knowledge -> save_json -> save_graph`.
+  The builder takes no arguments. Dependencies come from LangGraph runtime context
+  `SummaryContext(text_llm, card_llm, on_step)`, passed as `invoke(..., context=...)`: the text client writes the
+  chapter summary and `summarize_book`; the card updates (WHO IS WHO, WHERE IS WHERE) use the extract (JSON) client
+  (T-0013 Rev. 2).
+- Extraction graph `extract_story` (renamed from `extract_character` in T-0018; behavior unchanged). Parent graph:
+  `initialize -> chapter -> (next_chapter | done)`. The `chapter` subgraph is built from `STEPS`
+  (`steps/registry.py`: characters, relationships, locations, scenes, events, knowledge) and runs
+  `extract_<step> -> validate_<step>` for each, then `save_json -> save_graph`. Node names and `on_step` messages are
+  unchanged. Dependencies come from `StoryContext(llm, writer, on_step)` via `invoke(..., context=...)`; builders take no arguments.
   Recursion limits come from `summarize_chapter_recursion_limit` (`SUMMARY_NODES_PER_CHAPTER = 5`) and
-  `extract_character_recursion_limit` (`EXTRACT_NODES_PER_CHAPTER = 14`), shared by `pipeline.py` and the audit runner.
+  `extract_story_recursion_limit` (`EXTRACT_NODES_PER_CHAPTER = len(STEPS) * 2 + 2 = 14`), shared by `pipeline.py` and
+  the audit runner.
+- Step modules (`extract_story/steps/<step>/{model,prompt,logic,nodes}.py`) import only earlier steps and shared
+  modules (`ingest/text.py`, `ingest/storage.py`, `graph/base.py`, `steps/checks.py`); a test enforces this.
+  The relationship rewrite after character merges now runs at the start of `extract_relationships`.
 - Call counts before retries: summary graph `3N+1` (3 per chapter + `summarize_book`; 52 for 17 chapters);
   extraction graph `6N` (characters, relationships, locations, scene map, events, knowledge).
 - Every JSON call goes through `_ask`, which retries transient provider errors (HTTP 408/429/500/502/503/504 or
@@ -57,29 +65,29 @@ pov knowledge <book_id> <character> [--run R] [--until uNN|uNN_sM] [--json] [--r
 
 ### Step contracts (all structured JSON, Python-validated, changes-only where noted)
 
-- **Summary calls** (`summarize_chapter/prompt/`): Call 1 plain-text chapter summary in own words; Call 2/3
+- **Summary calls** (`summarize_chapter/prompt/`; `ChapterSummary` and `format_previous_context` are the package's public contract): Call 1 plain-text chapter summary in own words; Call 2/3
   `CardChanges` (`add` + `update`) for WHO IS WHO (`C001`) and WHERE IS WHERE (`P001`), reducer
   `upsert_cards`, rejecting unknown/duplicate update IDs and duplicate-name adds (quote-normalized `name_key`);
   Call 4 `validate_summary` renders cards without IDs into `ChapterSummary`; Call 5 `save_summary` writes
   `summaries/uNN.summary.json` (up to 2 extra attempts with `Rejected: <reason>`). The old full-list
   validators were removed in T-0013 Rev. 2. `summarize_book` writes `summaries/book_memory.json`
   (`who_is_who`, `where_is_where`, `core_memory`).
-- **Characters** (`extract_characters`/`validate_characters`): changes-only delta (new characters plus existing ones
+- **Characters** (`steps/characters/`, incl. `identity.py`): changes-only delta (new characters plus existing ones
   that gain information; null/[] = unchanged). No relationships field (`extra="forbid"`). `new_N` proposals get
   stable `char_NNN`; explicit merges keep the earliest ID and flatten redirects.
-- **Relationships** (`relationship.py`): ops `start`/`end` with `source_id`, `target_id`, 1-5 word `kind`,
+- **Relationships** (`steps/relationships/`): ops `start`/`end` with `source_id`, `target_id`, 1-5 word `kind`,
   current-chapter `paragraph_ids`; a repeated `start` for an open record is a no-op; merges rewrite IDs.
-- **Locations** (`location.py`): `new_N` -> `loc_NNN`, `part_of` references without self-reference or cycles,
+- **Locations** (`steps/locations/`): `new_N` -> `loc_NNN`, `part_of` references without self-reference or cycles,
   permanent `part_of` must refer to the immutable input roster.
-- **Scene map** (`scene_map.py`): complete ordered paragraph coverage without gaps/overlap, `segment_id` `uNN_sM`,
+- **Scene map** (`steps/scenes/`): complete ordered paragraph coverage without gaps/overlap, `segment_id` `uNN_sM`,
   `viewpoint_ids <= present_ids`, `present_ids & mentioned_ids == empty`, `time.relation`
   `continues|later|parallel|flashback|time_jump` (anchor required for `parallel`/`flashback`).
-- **Events/claims** (`events.py`, `prompt/extract_events.py`, T-0016): a claim is a short statement (<= 25 words) with
+- **Events/claims** (`steps/events/`, T-0016): a claim is a short statement (<= 25 words) with
   `truth` `unknown|true|false`; events (<= 20 words) with participants and paragraph evidence; utterances
   (`spoken|written`, speaker or null, addressees, exact quote <= 40 words, checked against its cited paragraphs) that
   assert claims; `truth_changes` set a claim's truth later with paragraph evidence. Claim IDs are Python-assigned.
   Per-chapter files: `uNN.events.proposed.json`, `uNN.events.json`.
-- **Knowledge** (`knowledge.py`, `prompt/extract_knowledge.py`, T-0017): acquisitions `(character, claim, channel,
+- **Knowledge** (`steps/knowledge/`, T-0017): acquisitions `(character, claim, channel,
   stance, segment, optional source, paragraph evidence)`. Channels: `prior`, `witnessed`, `told`, `read`,
   `overheard`, `inferred`, `learns_truth`. Stances: `believes`, `doubts`, `disbelieves`. The prompt receives the scene
   map, all claims, this chapter's events/utterances, and current beliefs of characters in the chapter. A repeated
@@ -90,7 +98,8 @@ pov knowledge <book_id> <character> [--run R] [--until uNN|uNN_sM] [--json] [--r
 
 ## Neo4j
 
-- Writer: `Neo4jGraphWriter` in `infrastructure/neo4j_store.py` (replaced `Neo4jCharacterWriter`; methods
+- Writer: `Neo4jGraphWriter` in `infrastructure/neo4j/writer.py` (package `infrastructure/neo4j/`: `connection.py`,
+  `cypher.py` statements per entity, `writer.py`; replaced `neo4j_store.py` in T-0018; methods
   `ensure_schema`, `start_run`, `write_chapter`, `finish_run`, `fail_run`). `save_graph` (last node per chapter)
   writes the cumulative run graph in one transaction, so merges/redirects that change earlier data cannot leave
   stale nodes. Without a writer (`--no-neo4j`) it does nothing.
@@ -100,7 +109,7 @@ pov knowledge <book_id> <character> [--run R] [--until uNN|uNN_sM] [--json] [--r
 - Edges: `RELATES_TO`, `PART_OF`, `OCCURRED_AT`, `NEXT` (scene order), `PRESENT_IN {viewpoint}`, `MENTIONED_IN`,
   `CONCERNS`, `IN_SCENE`, `PARTICIPATED_IN`, `HAS_CLAIM`, `SAID`, `ADDRESSED_TO`, `ASSERTS`, `ACQUIRED`, `ABOUT`,
   `VIA` (event or utterance), `EXPERIENCED` (witnessed events). Read statements in the source for exact properties.
-- `snapshot.py` builds plain rows and applies identity redirects; the audit runner never invokes the writer.
+- `extract_story/snapshot.py` builds plain rows and applies identity redirects; the audit runner never invokes the writer.
 
 ## Current Source Map
 
@@ -111,13 +120,15 @@ pov knowledge <book_id> <character> [--run R] [--until uNN|uNN_sM] [--json] [--r
 | `src/pov_retell/book/` | Phase A loading, structure mapping, cutting and file output. |
 | `src/pov_retell/ingest/pipeline.py` | Run orchestration, run status (`start_run`/`finish_run`/`fail_run`), writer lifetime. |
 | `src/pov_retell/ingest/source.py`, `model.py` | Validated Chapter inputs and result type. |
+| `src/pov_retell/ingest/text.py`, `storage.py` | Shared text helpers (`name_key`, ...) and atomic JSON saving. |
 | `src/pov_retell/ingest/timeline.py` | Character knowledge at a point in the story, from a run's JSON files. |
-| `src/pov_retell/ingest/graph/summarize_chapter/` | Summary graph, models, logic and `prompt/`. |
-| `src/pov_retell/ingest/graph/extract_character/` | Extraction graph, models, `identity.py`, `relationship.py`, `location.py`, `scene_map.py`, `events.py`, `knowledge.py`, `snapshot.py`, `prompt/`. |
+| `src/pov_retell/ingest/graph/base.py` | Shared `StrictModel`, `Text`. |
+| `src/pov_retell/ingest/graph/summarize_chapter/` | `graph.py` (wiring), `nodes.py`, `context.py`, `state.py`, `model.py`, `logic.py`, `prompt/`. |
+| `src/pov_retell/ingest/graph/extract_story/` | `graph.py` (wiring), `nodes.py`, `context.py`, `state.py`, `output.py` (`save_json`, `save_graph`), `snapshot.py`, `steps/` (`registry.py`, `checks.py`, one folder per step). |
 | `src/pov_retell/infrastructure/llm.py` | Synchronous OpenRouter JSON and text adapters, transient retry. |
-| `src/pov_retell/infrastructure/neo4j_store.py` | Connectivity, health check, `Neo4jGraphWriter`. |
+| `src/pov_retell/infrastructure/neo4j/` | `connection.py` (connectivity, health check), `cypher.py`, `writer.py` (`Neo4jGraphWriter`). |
 
-Prompts live inside each graph's `prompt/` folder (old top-level `prompt/` paths in handoffs are historical).
+Prompts live with their graph (`summarize_chapter/prompt/`, `extract_story/steps/<step>/prompt.py`); old `prompt/`, `extract_character/` and `neo4j_store.py` paths in handoffs and older tickets are historical.
 Token caps are separate by graph (configured, not measured usage).
 
 ## Data Contracts
@@ -141,6 +152,7 @@ Do not paste secrets or the whole `.env`. Required names include:
   `OPENROUTER_EXTRACT_CHARACTER_PROVIDER` (comma-separated; empty = default routing),
   `OPENROUTER_EXTRACT_CHARACTER_ALLOW_FALLBACKS`, `OPENROUTER_EXTRACT_CHARACTER_REASONING`
   (`none`, `enabled`, `low`, `medium`, `high`), `OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS`.
+  The names keep `EXTRACT_CHARACTER` although the graph is now `extract_story` (the audit manifest keys mirror them).
   This client now serves all JSON steps: characters, relationships, locations, scenes, events, knowledge, and
   the summary card updates. It sends a strict JSON schema, `provider` (with `require_parameters: true` when
   structured outputs are on), and `reasoning`.
@@ -181,8 +193,8 @@ handoffs, not repeated here; the code has changed substantially since, and those
   product manager (writes/reviews tickets, no application code); other agents implement and mark `done`.
   Exception (user decision 2026-11-16): for the "finish the rest of the project" roadmap, Claude wrote T-0013 Rev. 2
   and T-0014 to T-0017 code directly. This exception is scoped to that roadmap.
-- Ticket status at 2026-11-16: T-0001 to T-0008, T-0010 to T-0012 are `verified`; T-0013 to T-0017 are `done`
-  (unreviewed, unmerged, stacked as listed above); T-0009 (LangSmith env export) is `draft` awaiting the user.
+- Ticket status at 2026-11-19: T-0001 to T-0008, T-0010 to T-0012, T-0018 are `verified`; T-0013 to T-0016 are merged;
+  T-0017 is `done` (unreviewed, PR #9 open); T-0009 (LangSmith env export) is `draft` awaiting the user.
 - The slide deck (T-0010, `doc/presentation/`) and its English rehearsal script were built and checked in
   October; details are in the ticket and handoffs. They describe an earlier design and numbers whose provenance was
   not established, so treat them as presentation material, not as a spec of the current pipeline.
@@ -215,17 +227,14 @@ env POV_NEO4J=1 .venv/bin/python -m pytest tests/test_neo4j_integration.py -q -m
 `make dev` starts Compose without waiting for health; `make neo4j-up` waits. For PyCharm, use `.venv/bin/pov`.
 Real-provider tests require `POV_OPENROUTER=1`.
 
-### Latest Offline Verification (2026-11-16, HEAD of T-0017, reported by the implementer)
+### Latest Offline Verification (2026-11-19, HEAD of T-0018, verified by the reviewer)
 
-- Pytest command above -> `381 passed, 5 skipped`. The base branch before this work
-  (`ticket/T-0014-transient-retry`) gave `1 failed, 307 passed, 4 skipped`; the failure was the audit mock-transport
-  test, because the audit runner did not yet pass the card client.
-- `ruff check` passed; `ruff format --check` -> 80 files already formatted; `mypy src/pov_retell` -> no issues in
-  50 source files; `mypy src tests` -> 18 errors in `tests/test_config.py`, `tests/test_llm.py`,
-  `tests/test_character_ingest.py`, the same 18 as on the base branch; `git diff --check` clean.
-- Opt-in Neo4j: `POV_NEO4J=1 ... pytest tests/test_neo4j_integration.py -q -m neo4j` -> `3 passed` against the local
-  dev Neo4j 5. A scratch end-to-end `ingest_book` with a fake LLM and the real writer produced every node/edge type and
-  run status `complete`; its data was deleted.
+- Pytest command above -> `397 passed, 5 skipped` (T-0017 had 381; T-0018 added 16 structure tests).
+- `ruff check` and `ruff format --check` clean (113 files); `mypy src/pov_retell` -> no issues in 82 files;
+  `mypy src tests` -> the same 18 pre-existing errors in test files.
+- T-0018 is a pure refactor: prompts and Cypher are byte-identical, and two golden fake-LLM runs (before/after) give
+  identical files, rendered prompts, snapshots and steps (apart from the intended `extract_story` rename).
+- Opt-in Neo4j: the implementer reported `3 passed`; the reviewer did not rerun it.
 - No live OpenRouter call was made. The events and knowledge prompts are untested with a real model. A passing
   schema/test suite is not factual story validation.
 - Older per-ticket verification blocks (T-0001 to T-0012, 2026-10-24 to 2026-10-28) live in the ticket Completion
@@ -237,8 +246,10 @@ Real-provider tests require `POV_OPENROUTER=1`.
   user's OK; also the earlier unverified live items: extract client with `z-ai/glm-5.3-flash` on `open-inference/fp4`
   (strict JSON schema, reasoning `enabled` vs `medium`), card updates on that client, and whether summary reasoning
   `medium` is honored. Offline request checks cannot establish these.
-- Whether to review (T-0013 to T-0017) and merge the stacked branches into `main`; before merging, follow the
-  ticket README (fetch, pull `main`, rerun verification). Nothing is pushed or merged without the user.
+- Review T-0017 and merge PR #9, then T-0018 (not pushed); before merging, follow the ticket README (fetch, pull
+  `main`, rerun verification). Nothing is pushed or merged without the user.
+- T-0018 follow-ups (not done): remove the unused `focus_is_ambiguous`; replace long positional argument lists with one
+  input object per step; tighten the recursion-limit helper and its comment.
 - T-0009 (LangSmith env export) remains `draft`.
 - POV narrator / retelling is not started (user did not choose it on 2026-11-16).
 - Open question (T-0017): the speaker of an utterance does not automatically believe its claims (a speaker may lie);
@@ -253,7 +264,7 @@ Real-provider tests require `POV_OPENROUTER=1`.
 ## Further Reading
 
 - [AI workspace navigation](README.md), [workspace instructions](AGENTS.md), [tickets](tickets/README.md).
-- Completion reports: [T-0015](tickets/T-0015-neo4j-graph-per-chapter.md), [T-0016](tickets/T-0016-events-claims.md),
+- Completion reports: [T-0018](tickets/T-0018-langgraph-refactor.md) (module layout and design), [T-0015](tickets/T-0015-neo4j-graph-per-chapter.md), [T-0016](tickets/T-0016-events-claims.md),
   [T-0017](tickets/T-0017-knowledge-timeline.md).
 - [Detailed October 23 handoff](handoffs/HANDOFF_2026-10-23.md), [October 22 experiments](handoffs/HANDOFF_2026-10-22.md),
   [earlier October 17 baseline](handoffs/HANDOFF_2026-10-17.md).

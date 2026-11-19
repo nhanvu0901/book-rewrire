@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from pov_retell.config import Settings
-from pov_retell.infrastructure.neo4j_store import Neo4jGraphWriter, check_health, connect
+from pov_retell.infrastructure.neo4j import Neo4jGraphWriter, check_health, connect
 
 
 def character_row(character_id: str, name: str, personality: str | None) -> dict[str, Any]:

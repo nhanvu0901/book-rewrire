@@ -1,13 +1,13 @@
 import json
 
 from pov_retell.infrastructure.llm import JsonLLM
-from pov_retell.ingest.graph.extract_character.model import (
-    CharacterRecord,
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.relationships.model import (
     ExtractRelationshipResponse,
     RelationshipRecord,
     RelationshipSpan,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_relationship import (
+from pov_retell.ingest.graph.extract_story.steps.relationships.prompt import (
     PROMPT_EXTRACT_RELATIONSHIP,
 )
 from pov_retell.ingest.model import Chapter

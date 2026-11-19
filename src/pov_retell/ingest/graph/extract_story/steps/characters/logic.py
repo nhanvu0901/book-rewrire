@@ -1,23 +1,16 @@
 import json
-from pathlib import Path
-from typing import Any
 
 from pov_retell.infrastructure.llm import JsonLLM
-from pov_retell.ingest.graph.extract_character.identity import (
-    appears_in_source,
-    apply_identities,
-    combine_descriptions,
-    normalized,
-    unique_names,
-)
-from pov_retell.ingest.graph.extract_character.model import (
+from pov_retell.ingest.graph.extract_story.steps.characters.identity import apply_identities
+from pov_retell.ingest.graph.extract_story.steps.characters.model import (
     CharacterIdentity,
     CharacterRecord,
     ExtractCharacterResponse,
     IdentityResponse,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_character import PROMPT_EXTRACT_CHAR
+from pov_retell.ingest.graph.extract_story.steps.characters.prompt import PROMPT_EXTRACT_CHAR
 from pov_retell.ingest.model import Chapter
+from pov_retell.ingest.text import appears_in_source, combine_descriptions, normalized, unique_names
 
 
 def extract_characters(
@@ -91,32 +84,3 @@ def validate_characters(
             ]
         )
     return records, active, next_number, redirects
-
-
-def save_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    try:
-        temporary.write_text(
-            json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def character_rows(characters: list[CharacterRecord]) -> list[dict[str, Any]]:
-    return [
-        {
-            "character_id": c.character_id,
-            "canonical_name": c.candidate_name,
-            "aliases": c.aliases,
-            "gender": c.attributes.gender,
-            "species": c.attributes.species,
-            "age_description": c.attributes.age_description,
-            "physical_description": c.attributes.physical_description,
-            "personality": "; ".join(c.attributes.personality_traits) or None,
-            "resolution_status": c.resolution_status,
-        }
-        for c in characters
-    ]

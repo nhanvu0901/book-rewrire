@@ -17,15 +17,14 @@ from test_character_ingest import (
 )
 from test_llm import make
 
-from pov_retell.ingest.graph.extract_character.events import extract_events, validate_events
-from pov_retell.ingest.graph.extract_character.model import (
-    CharacterRecord,
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.events.logic import extract_events, validate_events
+from pov_retell.ingest.graph.extract_story.steps.events.model import (
     ClaimRecord,
     ExtractEventResponse,
-    SceneSegmentRecord,
-    SceneTime,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_events import PROMPT_EXTRACT_EVENTS
+from pov_retell.ingest.graph.extract_story.steps.events.prompt import PROMPT_EXTRACT_EVENTS
+from pov_retell.ingest.graph.extract_story.steps.scenes.model import SceneSegmentRecord, SceneTime
 from pov_retell.ingest.model import Chapter
 from pov_retell.ingest.pipeline import ingest_book
 

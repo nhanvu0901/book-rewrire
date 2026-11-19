@@ -2,25 +2,19 @@ import json
 from collections.abc import Sequence
 
 from pov_retell.infrastructure.llm import JsonLLM
-from pov_retell.ingest.graph.extract_character.model import (
-    CharacterRecord,
-    LocationRecord,
+from pov_retell.ingest.graph.extract_story.steps.characters.identity import resolve_ids
+from pov_retell.ingest.graph.extract_story.steps.characters.model import CharacterRecord
+from pov_retell.ingest.graph.extract_story.steps.locations.model import LocationRecord
+from pov_retell.ingest.graph.extract_story.steps.scenes.model import (
     SceneMapResponse,
     SceneSegmentRecord,
     SceneTime,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_scene_map import (
-    PROMPT_EXTRACT_SCENE_MAP,
-)
+from pov_retell.ingest.graph.extract_story.steps.scenes.prompt import PROMPT_EXTRACT_SCENE_MAP
 from pov_retell.ingest.model import Chapter
 
 VALID_TIME_RELATIONS = {"continues", "later", "parallel", "flashback", "time_jump"}
 ANCHOR_REQUIRED_RELATIONS = {"parallel", "flashback"}
-
-
-def _dedupe_ids(ids: Sequence[str], redirects: dict[str, str]) -> list[str]:
-    resolved = [redirects.get(cid, cid) for cid in ids]
-    return list(dict.fromkeys(resolved))
 
 
 def extract_scene_map(
@@ -127,9 +121,9 @@ def validate_scene_map(
         if seg.location_id is not None and seg.location_id not in known_location_ids:
             raise ValueError(f"Unknown location_id in scene segment: {seg.location_id}")
 
-        present_ids = _dedupe_ids(seg.present_ids, redirects)
-        mentioned_ids = _dedupe_ids(seg.mentioned_ids, redirects)
-        viewpoint_ids = _dedupe_ids(seg.viewpoint_ids, redirects)
+        present_ids = resolve_ids(seg.present_ids, redirects)
+        mentioned_ids = resolve_ids(seg.mentioned_ids, redirects)
+        viewpoint_ids = resolve_ids(seg.viewpoint_ids, redirects)
 
         for cid in (*present_ids, *mentioned_ids, *viewpoint_ids):
             if cid not in known_character_ids:
@@ -197,3 +191,20 @@ def validate_scene_map(
         )
 
     return records
+
+
+def resolve_scene(scene: SceneSegmentRecord, redirects: dict[str, str]) -> SceneSegmentRecord:
+    """Return the scene with retired character IDs replaced by their survivors."""
+    if not redirects:
+        return scene
+    present = resolve_ids(scene.present_ids, redirects)
+    present_set = set(present)
+    return scene.model_copy(
+        update={
+            "present_ids": present,
+            "mentioned_ids": [
+                cid for cid in resolve_ids(scene.mentioned_ids, redirects) if cid not in present_set
+            ],
+            "viewpoint_ids": resolve_ids(scene.viewpoint_ids, redirects),
+        }
+    )

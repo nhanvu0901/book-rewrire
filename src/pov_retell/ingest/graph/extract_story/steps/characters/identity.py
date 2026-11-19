@@ -1,27 +1,19 @@
+"""Character identity: merging, renaming and ID redirects."""
+
 import re
+from collections.abc import Sequence
 
-from pov_retell.ingest.graph.extract_character.model import CharacterRecord, IdentityResponse
+from pov_retell.ingest.graph.extract_story.steps.characters.model import (
+    CharacterRecord,
+    IdentityResponse,
+)
 from pov_retell.ingest.model import Chapter
+from pov_retell.ingest.text import appears_in_source, combine_descriptions, normalized, unique_names
 
 
-def normalized(text: str) -> str:
-    return " ".join(text.split()).casefold()
-
-
-def appears_in_source(value: str, source: str) -> bool:
-    return re.search(r"(?<!\w)" + re.escape(normalized(value)) + r"(?!\w)", source) is not None
-
-
-def unique_names(names: list[str]) -> list[str]:
-    result: dict[str, str] = {}
-    for name in names:
-        result.setdefault(normalized(name), name)
-    return list(result.values())
-
-
-def combine_descriptions(first: str | None, second: str | None) -> str | None:
-    parts = [part for value in (first, second) if value for part in value.split("; ")]
-    return "; ".join(unique_names(parts)) or None
+def resolve_ids(ids: Sequence[str], redirects: dict[str, str]) -> list[str]:
+    """Replace retired character IDs by their survivors and drop repeats, keeping order."""
+    return list(dict.fromkeys(redirects.get(cid, cid) for cid in ids))
 
 
 def focus_is_ambiguous(

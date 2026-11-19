@@ -77,6 +77,7 @@ every review is committed.
 | [T-0015](T-0015-neo4j-graph-per-chapter.md) | Write the story graph to Neo4j after each chapter | done | Claude (at the user's request) | 2026-11-16 |
 | [T-0016](T-0016-events-claims.md) | Extract events, utterances and claims per chapter | done | Claude (at the user's request) | 2026-11-16 |
 | [T-0017](T-0017-knowledge-timeline.md) | Knowledge timeline: who learns which claim, how and when | done | Claude (at the user's request) | 2026-11-16 |
+| [T-0018](T-0018-langgraph-refactor.md) | Refactor ingestion into cohesive LangGraph modules (behavior unchanged) | verified | Claude Sonnet (subagent, at the user's request) | 2026-11-19 |
 
 ## Recommended order
 
@@ -90,6 +91,6 @@ T-0010 is closed (2026-10-28): the user's own 8-slide deck replaced Revision 5.
 T-0011 (remove ScaleDown) is verified (2026-10-26).
 T-0009 waits for the user's choice.
 
-Roadmap (user, 2026-11-16, Claude implements at the user's request), stacked branches:
-T-0013 Revision 2 → T-0014 → T-0015 (graph per chapter) → T-0016 (events and claims) →
-T-0017 (knowledge timeline). Merge them in this order.
+Roadmap (user, 2026-11-16, Claude implements at the user's request): T-0013 Revision 2 to
+T-0016 are merged into `main` (PRs #7, #8). Still to merge, in this order: T-0017 (PR #9),
+then T-0018 (LangGraph refactor, stacked on T-0017).

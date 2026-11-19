@@ -16,10 +16,12 @@ from openai import OpenAI
 
 from pov_retell.config import Settings
 from pov_retell.infrastructure.llm import OpenRouterClient
-from pov_retell.ingest.graph.extract_character.graph import (
-    build_extract_character_graph,
-    extract_character_recursion_limit,
+from pov_retell.ingest.graph.extract_story.context import StoryContext
+from pov_retell.ingest.graph.extract_story.graph import (
+    build_extract_story_graph,
+    extract_story_recursion_limit,
 )
+from pov_retell.ingest.graph.summarize_chapter.context import SummaryContext
 from pov_retell.ingest.graph.summarize_chapter.graph import (
     build_summarize_chapter_graph,
     summarize_chapter_recursion_limit,
@@ -300,17 +302,7 @@ def main(argv: list[str] | None = None) -> int:
                     reasoning=settings.OPENROUTER_EXTRACT_CHARACTER_REASONING,
                     structured_outputs=settings.OPENROUTER_EXTRACT_CHARACTER_STRUCTURED_OUTPUTS,
                 )
-                summary_graph = build_summarize_chapter_graph(
-                    OpenRouterClient(
-                        settings,
-                        client=transport,
-                        model=settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL,
-                        max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
-                        reasoning=settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
-                    ),
-                    extract_client,
-                    recorder.step,
-                )
+                summary_graph = build_summarize_chapter_graph()
                 summaries = summary_graph.invoke(
                     {
                         "title": title,
@@ -318,15 +310,26 @@ def main(argv: list[str] | None = None) -> int:
                         "output_dir": output,
                     },
                     {"recursion_limit": summarize_chapter_recursion_limit(len(chapters))},
+                    context=SummaryContext(
+                        OpenRouterClient(
+                            settings,
+                            client=transport,
+                            model=settings.OPENROUTER_SUMMARIZE_CHAPTER_MODEL,
+                            max_tokens_setting="OPENROUTER_SUMMARIZE_CHAPTER_MAX_TOKENS",
+                            reasoning=settings.OPENROUTER_SUMMARIZE_CHAPTER_REASONING,
+                        ),
+                        extract_client,
+                        recorder.step,
+                    ),
                 )
-                recorder.phase = "extract_character"
+                recorder.phase = "extract_story"
                 recorder.chapter_id = None
                 recorder.step(
-                    "Build extract_character graph: model="
+                    "Build extract_story graph: model="
                     + settings.OPENROUTER_EXTRACT_CHARACTER_MODEL
                 )
-                character_graph = build_extract_character_graph(extract_client, recorder.step)
-                character_graph.invoke(
+                story_graph = build_extract_story_graph()
+                story_graph.invoke(
                     {
                         "book_id": book_id,
                         "run_id": output.name,
@@ -335,7 +338,8 @@ def main(argv: list[str] | None = None) -> int:
                         "summaries": summaries["summaries"],
                         "output_dir": output,
                     },
-                    {"recursion_limit": extract_character_recursion_limit(len(chapters))},
+                    {"recursion_limit": extract_story_recursion_limit(len(chapters))},
+                    context=StoryContext(extract_client, None, recorder.step),
                 )
         recorder.phase = "done"
         recorder.chapter_id = None

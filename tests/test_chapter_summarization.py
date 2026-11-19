@@ -7,10 +7,10 @@ from test_character_ingest import ScriptedLLM, make_extraction
 from test_llm import make
 
 from pov_retell.infrastructure.llm import LLMError
+from pov_retell.ingest.graph.summarize_chapter.context import SummaryContext
 from pov_retell.ingest.graph.summarize_chapter.logic import (
     changes_to_update,
     check_changes,
-    name_key,
     render_cards,
 )
 from pov_retell.ingest.graph.summarize_chapter.model import (
@@ -25,6 +25,7 @@ from pov_retell.ingest.graph.summarize_chapter.prompt.update_who_is_who import (
     PROMPT_UPDATE_WHO_IS_WHO,
 )
 from pov_retell.ingest.source import load_chapters
+from pov_retell.ingest.text import name_key
 
 
 def card(name: str, card_text: str, *other_names: str) -> dict[str, object]:
@@ -84,8 +85,9 @@ def test_summary_graph_passes_previous_context_and_saves_chapter_and_book_memory
             "FINAL_CORE_MEMORY",
         ]
     )
-    final = build_summarize_chapter_graph(llm, llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    final = build_summarize_chapter_graph().invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir},
+        context=SummaryContext(llm, llm),
     )
     assert final["chapter_index"] == 3
     assert final["who_is_who"] == (
@@ -187,8 +189,9 @@ def test_fake_chapter_update_only_preserves_earlier_cards(tmp_path: Path) -> Non
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm, llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    final = build_summarize_chapter_graph().invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir},
+        context=SummaryContext(llm, llm),
     )
     assert final["who_is_who"] == "Mara | - | lone traveler\nJo | - | friend"
     assert "C001" in final["who_cards"]
@@ -217,8 +220,9 @@ def test_unknown_update_id_retries_and_raises_after_max_retries(tmp_path: Path) 
         ]
     )
     with pytest.raises(LLMError, match=r"update uses unknown id\(s\): C999"):
-        build_summarize_chapter_graph(llm, llm).invoke(
-            {"title": title, "chapters": chapters, "output_dir": output_dir}
+        build_summarize_chapter_graph().invoke(
+            {"title": title, "chapters": chapters, "output_dir": output_dir},
+            context=SummaryContext(llm, llm),
         )
     assert len(transport.requests) == 7
     retry_prompt = transport.requests[5]["messages"][-1]["content"]
@@ -247,8 +251,9 @@ def test_duplicate_name_add_retries_and_raises_after_max_retries(tmp_path: Path)
         ]
     )
     with pytest.raises(LLMError, match=r"'Mara' is already listed as C001; use update"):
-        build_summarize_chapter_graph(llm, llm).invoke(
-            {"title": title, "chapters": chapters, "output_dir": output_dir}
+        build_summarize_chapter_graph().invoke(
+            {"title": title, "chapters": chapters, "output_dir": output_dir},
+            context=SummaryContext(llm, llm),
         )
     assert len(transport.requests) == 7
     retry_prompt = transport.requests[5]["messages"][-1]["content"]
@@ -275,8 +280,9 @@ def test_unknown_update_id_retries_and_recovers(tmp_path: Path) -> None:
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm, llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    final = build_summarize_chapter_graph().invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir},
+        context=SummaryContext(llm, llm),
     )
     assert len(transport.requests) == 8
     retry_prompt = transport.requests[5]["messages"][-1]["content"]
@@ -305,8 +311,9 @@ def test_quote_normalized_duplicate_name_add_retries_and_recovers(tmp_path: Path
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm, llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    final = build_summarize_chapter_graph().invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir},
+        context=SummaryContext(llm, llm),
     )
     assert len(transport.requests) == 8
     retry_prompt = transport.requests[6]["messages"][-1]["content"]
@@ -344,8 +351,9 @@ def test_ids_are_stable_across_chapters_and_continue_sequence(tmp_path: Path) ->
             "Core memory.",
         ]
     )
-    final = build_summarize_chapter_graph(llm, llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    final = build_summarize_chapter_graph().invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir},
+        context=SummaryContext(llm, llm),
     )
     assert list(final["who_cards"].keys()) == ["C001", "C002", "C003"]
     assert list(final["where_cards"].keys()) == ["P001", "P002"]
@@ -537,9 +545,10 @@ def test_summary_graph_completes_seventeen_chapters_in_source_order(tmp_path: Pa
             )
     replies.append("Core memory of all seventeen days.")
     llm = ScriptedLLM(replies)
-    final = build_summarize_chapter_graph(llm, llm).invoke(
+    final = build_summarize_chapter_graph().invoke(
         {"title": title, "chapters": chapters, "output_dir": output_dir},
         {"recursion_limit": summarize_chapter_recursion_limit(len(chapters))},
+        context=SummaryContext(llm, llm),
     )
     assert final["chapter_index"] == 17
     assert len(llm.prompts) == 18  # 17 chapter summaries + 1 book memory
@@ -581,8 +590,9 @@ def run_summary_graph(
     title, chapters = load_chapters(tmp_path / "extracted", "sample")
     output_dir = tmp_path / "ingest/sample/summary"
     output_dir.mkdir(parents=True)
-    final = build_summarize_chapter_graph(summary_llm, card_llm).invoke(
-        {"title": title, "chapters": chapters, "output_dir": output_dir}
+    final = build_summarize_chapter_graph().invoke(
+        {"title": title, "chapters": chapters, "output_dir": output_dir},
+        context=SummaryContext(summary_llm, card_llm),
     )
     return final, output_dir
 

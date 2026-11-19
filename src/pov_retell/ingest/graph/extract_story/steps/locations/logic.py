@@ -2,15 +2,13 @@ import json
 import re
 
 from pov_retell.infrastructure.llm import JsonLLM
-from pov_retell.ingest.graph.extract_character.identity import normalized, unique_names
-from pov_retell.ingest.graph.extract_character.model import (
+from pov_retell.ingest.graph.extract_story.steps.locations.model import (
     ExtractLocationResponse,
     LocationRecord,
 )
-from pov_retell.ingest.graph.extract_character.prompt.extract_location import (
-    PROMPT_EXTRACT_LOCATION,
-)
+from pov_retell.ingest.graph.extract_story.steps.locations.prompt import PROMPT_EXTRACT_LOCATION
 from pov_retell.ingest.model import Chapter
+from pov_retell.ingest.text import normalized, unique_names
 
 NEW_LOCATION_ID_RE = re.compile(r"^new_[1-9]\d*$")
 
